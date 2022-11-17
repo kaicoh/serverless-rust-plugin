@@ -1,0 +1,30 @@
+{
+  "name": "serverless-rust-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaicoh/serverless-rust-plugin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kaicoh/serverless-rust-plugin/issues"
+  },
+  "homepage": "https://github.com/kaicoh/serverless-rust-plugin#readme",
+  "dependencies": {
+    "serverless": "^3.24.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.27.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "jest": "^29.3.1"
+  }
+}
