@@ -8,6 +8,7 @@ parserOptions:
   ecmaVersion: latest
 rules:
   strict: off
+  no-underscore-dangle: off
 overrides:
   - files: tests/**/*.test.js
     plugins:

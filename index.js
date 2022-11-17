@@ -3,30 +3,23 @@
 const path = require('path');
 const fs = require('fs');
 const Cargo = require('./lib/cargo');
-const builderFactory = require('./lib/builder');
+const CargoLambda = require('./lib/cargolambda');
 
-const PROFILE_RELEASE = 'release';
-const ARCH_ARM64 = 'arm64';
-const FORMAT_ZIP = 'zip';
 const DEFAULT_DOCKER_TAG = 'latest';
 const DEFAULT_DOCKER_IMAGE = 'calavera/cargo-lambda';
-const DEFAULT_ARCHTECTURE = 'x86_64';
+const NO_OUTPUT_CAPTURE = { stdio: ['ignore', process.stdout, process.stderr] };
 
 // https://serverless.com/blog/writing-serverless-plugins/
 // https://serverless.com/framework/docs/providers/aws/guide/plugins/
 
-function cargoLambdaOptions(profile, arch, format) {
-  const outputFormat = format === FORMAT_ZIP ? ['--output-format', 'zip'] : [];
-  return [
-    profile === PROFILE_RELEASE ? '--release' : '',
-    arch === ARCH_ARM64 ? '--arm64' : '',
-    ...outputFormat,
-  ].filter((i) => i);
+function mkdirSyncIfNotExist(dirname) {
+  if (!fs.existsSync(dirname)) {
+    fs.mkdirSync(dirname, { recursive: true });
+  }
 }
 
-function zipPath(srcPath, binaryName) {
-  const binary = binaryName.split('.').reverse()[0];
-  return path.join(srcPath, 'target/lambda', binary, 'bootstrap.zip');
+function executable(binaryName, useZip) {
+  return useZip ? 'bootstrap' : binaryName;
 }
 
 // assumes docker is on the host's execution path for build
@@ -46,7 +39,6 @@ class ServerlessRustPlugin {
     // if (includeInvokeHook(serverless.version)) {
     //   this.hooks['before:invoke:local:invoke'] = this.build.bind(this);
     // }
-    //
     this.srcPath = path.resolve(this.servicePath);
 
     // MEMO: Customization for docker is disabled in 0.1.0 release.
@@ -63,6 +55,10 @@ class ServerlessRustPlugin {
 
   log(message) {
     this.serverless.cli.log(`[ServerlessRustPlugin]: ${message}`);
+  }
+
+  deployArtifactDir(profile) {
+    return path.join(this.srcPath, 'target/lambda', profile);
   }
 
   functions() {
@@ -89,29 +85,24 @@ class ServerlessRustPlugin {
       );
     }
 
-    const profile = this.custom.debug ? 'debug' : PROFILE_RELEASE;
-    const arch = service.provider.architecture || DEFAULT_ARCHTECTURE;
-    // MEMO: For 0.1.0 release, binary format is disabled.
-    const format = FORMAT_ZIP;
     const options = {
       useDocker: this.custom.useDocker,
       srcPath: this.srcPath,
-      cargoLambdaOptions: cargoLambdaOptions(profile, arch, format),
       dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
+      profile: this.custom.cargoProfile || CargoLambda.profile.release,
+      arch: service.provider.architecture || CargoLambda.architecture.x86_64,
+      // MEMO: For 0.1.0 release, binary format is disabled.
+      format: CargoLambda.format.zip,
     };
 
-    const builder = builderFactory(options);
+    const builder = new CargoLambda(options);
 
     this.log(builder.howToBuild());
-    this.log(
-      `Running "cargo lambda build${options.cargoLambdaOptions.length > 0 ? ` ${options.cargoLambdaOptions.join(' ')}` : ''}"`,
-    );
-    const result = builder.build();
+    this.log(`Running "${builder.buildCommand()}"`);
+    const result = builder.build(NO_OUTPUT_CAPTURE);
 
     if (result.error || result.status > 0) {
-      this.log(
-        `Rust build encountered an error: ${result.error} ${result.status}.`,
-      );
+      this.log(`Rust build encountered an error: ${result.error} ${result.status}.`);
       throw new Error(result.error);
     }
 
@@ -123,15 +114,24 @@ class ServerlessRustPlugin {
         return;
       }
 
-      const zipArtifactPath = zipPath(this.srcPath, binaryName);
-      const artifactPath = path.join(this.srcPath, 'target/lambda', `${funcName}.zip`);
+      // MEMO:
+      // If multiple artifacts have same file name like bootstrap.zip,
+      // the serverless framework fails to deploy each artifacts correctly.
+      // But cargo lambda builds all artifacts to bootstrap(.zip).
+      // So, this plugins renames artifacts using each function name.
+      // See: https://github.com/serverless/serverless/issues/3696
+      const buildArtifactPath = builder.artifactPath(binaryName);
+      const targetDir = this.deployArtifactDir(builder.profile);
+      mkdirSyncIfNotExist(targetDir);
+      const deployArtifactPath = path.join(targetDir, `${funcName}${builder.artifactExt()}`);
 
-      fs.createReadStream(zipArtifactPath).pipe(fs.createWriteStream(artifactPath));
+      fs.createReadStream(buildArtifactPath)
+        .pipe(fs.createWriteStream(deployArtifactPath));
 
-      func.handler = 'bootstrap';
+      func.handler = executable(binaryName, builder.useZip());
       func.package = {
         ...(func.package || {}),
-        artifact: artifactPath,
+        artifact: deployArtifactPath,
         individually: true,
       };
     });
