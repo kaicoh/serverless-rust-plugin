@@ -1,0 +1,16 @@
+[package]
+name = "multiple-binaries"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "binary1"
+path = "src/bin/binary1.rs"
+
+[[bin]]
+name = "binary2"
+path = "src/bin/binary2.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]

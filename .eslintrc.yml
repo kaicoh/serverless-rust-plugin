@@ -6,4 +6,13 @@ extends:
   - airbnb-base
 parserOptions:
   ecmaVersion: latest
-rules: {}
+rules:
+  strict: off
+overrides:
+  - files: tests/**/*.test.js
+    plugins:
+      - jest
+    env:
+      jest/globals: true
+    extends:
+      - plugin:jest/recommended
