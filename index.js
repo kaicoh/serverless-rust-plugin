@@ -61,6 +61,10 @@ class ServerlessRustPlugin {
     this.cargo = new Cargo(this.custom.cargoPath);
   }
 
+  log(message) {
+    this.serverless.cli.log(`[ServerlessRustPlugin]: ${message}`);
+  }
+
   functions() {
     return this.serverless.service.getAllFunctions();
   }
@@ -98,11 +102,14 @@ class ServerlessRustPlugin {
 
     const builder = builderFactory(options);
 
-    this.serverless.cli.log('Running cargo lambda build');
+    this.log(builder.howToBuild());
+    this.log(
+      `Running "cargo lambda build${options.cargoLambdaOptions.length > 0 ? ` ${options.cargoLambdaOptions.join(' ')}` : ''}"`,
+    );
     const result = builder.build();
 
     if (result.error || result.status > 0) {
-      this.serverless.cli.log(
+      this.log(
         `Rust build encountered an error: ${result.error} ${result.status}.`,
       );
       throw new Error(result.error);
