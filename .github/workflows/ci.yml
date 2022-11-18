@@ -35,6 +35,8 @@ jobs:
           version: 0.9.1
       - name: Install Cargo Lambda
         uses: zerj9/setup-cargo-lambda@v0.1.0
+      - name: NPM Install
+        run: npm ci
       - name: Test
         shell: bash
         run: npm run test:integration
