@@ -30,7 +30,7 @@ jobs:
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install ZigLang
-        uses: goto-bus-stop/setup-zig@v1
+        uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.9.1
       - name: Install Cargo Lambda
