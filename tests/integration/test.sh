@@ -67,7 +67,7 @@ echo "😀  Running integration tests"
 
 # install build deps
 assert_success "it installs with npm" \
-    npm i -D "$DIST" --silent
+    npm ci "$DIST" --silent
 
 # integration test `package` command
 assert_success "it packages with serverless" \
