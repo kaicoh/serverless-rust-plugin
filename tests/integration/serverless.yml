@@ -5,7 +5,6 @@ provider:
   name: aws
   runtime: provided.al2
   memorySize: 128
-  architecture: arm64
 
 plugins:
   - serverless-rust-plugin
