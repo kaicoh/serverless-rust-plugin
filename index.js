@@ -72,12 +72,12 @@ class ServerlessRustPlugin {
     }
 
     const binaryNames = this.cargo.binaries();
-    const rustFunctionsFound = this.functions().some((funcName) => {
+    const rustFunctions = this.functions().flatMap((funcName) => {
       const func = service.getFunction(funcName);
-      return binaryNames.some((bin) => bin === func.handler);
+      return binaryNames.some((bin) => bin === func.handler) ? funcName : [];
     });
 
-    if (!rustFunctionsFound) {
+    if (rustFunctions.length === 0) {
       throw new Error(
         'Error: no Rust functions found. '
         + 'Use "handler: {cargo-package-name}.{bin-name}" or "handler: {cargo-package-name}" '
@@ -106,19 +106,15 @@ class ServerlessRustPlugin {
       throw new Error(result.error);
     }
 
-    this.functions().forEach((funcName) => {
+    rustFunctions.forEach((funcName) => {
       const func = service.getFunction(funcName);
-      const binaryName = binaryNames.find((bin) => bin === func.handler);
-
-      if (binaryName === undefined) {
-        return;
-      }
+      const binaryName = func.handler;
 
       // MEMO:
       // If multiple artifacts have same file name like bootstrap.zip,
       // the serverless framework fails to deploy each artifacts correctly.
-      // But cargo lambda builds all artifacts to bootstrap(.zip).
-      // So, this plugins renames artifacts using each function name.
+      // But cargo lambda builds all artifacts into same name bootstrap(.zip),
+      // so this plugin copies artifacts using each function name and deploys them.
       // See: https://github.com/serverless/serverless/issues/3696
       const buildArtifactPath = builder.artifactPath(binaryName);
       const targetDir = this.deployArtifactDir(builder.profile);
