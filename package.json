@@ -12,9 +12,16 @@
     "type": "git",
     "url": "git+https://github.com/kaicoh/serverless-rust-plugin.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "rust",
+    "aws",
+    "aws-lambda",
+    "serverless",
+    "serverless-plugin",
+    "lambda"
+  ],
+  "author": "kaicoh",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/kaicoh/serverless-rust-plugin/issues"
   },
