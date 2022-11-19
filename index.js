@@ -18,6 +18,13 @@ function mkdirSyncIfNotExist(dirname) {
   }
 }
 
+function includeInvokeHook(serverlessVersion) {
+  const [major, minor] = serverlessVersion.split('.');
+  const majorVersion = parseInt(major, 10);
+  const minorVersion = parseInt(minor, 10);
+  return majorVersion === 1 && minorVersion >= 38 && minorVersion < 40;
+}
+
 class ServerlessRustPlugin {
   constructor(serverless, options) {
     this.serverless = serverless;
@@ -31,9 +38,10 @@ class ServerlessRustPlugin {
       // 'before:offline:start:init': this.build.bind(this),
     };
 
-    // if (includeInvokeHook(serverless.version)) {
-    //   this.hooks['before:invoke:local:invoke'] = this.build.bind(this);
-    // }
+    if (includeInvokeHook(serverless.version)) {
+      this.hooks['before:invoke:local:invoke'] = this.build.bind(this);
+    }
+
     this.srcPath = path.resolve(this.servicePath);
 
     // MEMO: Customization for docker is disabled in 0.1.0 release.

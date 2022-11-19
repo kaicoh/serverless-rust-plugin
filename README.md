@@ -61,6 +61,8 @@ See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sampl
 
 ### Invoke your lambda locally
 
+At the time of writing, you have to choose architecture `x86_64` to run lambda function locally via the following command because serverless framework uses docker image [lambci/lambda](https://hub.docker.com/r/lambci/lambda) whose architecture is `amd64` internally.
+
 ```
 $ serverless invoke local -f hello -d '{"firstName":"Mary"}'
 ```

@@ -18,6 +18,7 @@ describe('ServerlessRustPlugin', () => {
 
   function createMockServerless(custom = {}) {
     return {
+      version: '3.24.1',
       cli: { log: jest.fn() },
       service: {
         provider: {
@@ -69,6 +70,27 @@ describe('ServerlessRustPlugin', () => {
 
     it('sets "before:deploy:function:packageFunction" hook', () => {
       expect(plugin.hooks['before:deploy:function:packageFunction']).toBeDefined();
+    });
+
+    it.each([
+      // major, minor
+      [1, 36],
+      [1, 40],
+      [2, 0],
+    ])('doesn\'t set "before:invoke:local:invoke" hook when serverless version is %d.%d.x', (major, minor) => {
+      serverless.version = `${major}.${minor}.x`;
+      plugin = new ServerlessRustPlugin(serverless, options);
+      expect(plugin.hooks['before:invoke:local:invoke']).toBeUndefined();
+    });
+
+    it.each([
+      // major, minor
+      [1, 38],
+      [1, 39],
+    ])('sets "before:invoke:local:invoke" hook when serverless version is %d.%d.x', (major, minor) => {
+      serverless.version = `${major}.${minor}.x`;
+      plugin = new ServerlessRustPlugin(serverless, options);
+      expect(plugin.hooks['before:invoke:local:invoke']).toBeDefined();
     });
 
     it('sets "srcPath" from serverless.config.servicePath', () => {
