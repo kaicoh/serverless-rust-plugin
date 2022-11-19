@@ -1,6 +1,6 @@
 {
   "name": "serverless-rust-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Serverless Framework plugin for Rust using Cargo Lambda.",
   "main": "index.js",
   "scripts": {
@@ -37,5 +37,11 @@
     "eslint-plugin-jest": "^27.1.5",
     "jest": "^29.3.1",
     "ramda": "^0.28.0"
-  }
+  },
+  "files": [
+    "lib",
+    "index.js",
+    "package.json",
+    "README.md"
+  ]
 }
