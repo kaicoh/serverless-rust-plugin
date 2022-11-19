@@ -28,7 +28,7 @@ class ServerlessRustPlugin {
     this.serverless = serverless;
     this.options = options;
     this.servicePath = this.serverless.config.servicePath || '';
-    // MEMO: For 0.1.0 release, I focus on "package" and "deploy" event.
+    // MEMO: In 0.1.0 release, I focus on "package" and "deploy" event.
     this.hooks = {
       'before:package:createDeploymentArtifacts': this.build.bind(this),
       'before:deploy:function:packageFunction': this.build.bind(this),
@@ -91,7 +91,7 @@ class ServerlessRustPlugin {
       dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
       profile: this.custom.cargoProfile || CargoLambda.profile.release,
       arch: service.provider.architecture || CargoLambda.architecture.x86_64,
-      // MEMO: For 0.1.0 release, binary format is disabled.
+      // MEMO: In 0.1.0 release, binary format is disabled.
       format: CargoLambda.format.zip,
     };
 
