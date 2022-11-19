@@ -2,6 +2,7 @@
 
 [![Serverless](http://public.serverless.com/badges/v3.svg)](http://www.serverless.com)
 [![main](https://github.com/kaicoh/serverless-rust-plugin/actions/workflows/test.yml/badge.svg)](https://github.com/kaicoh/serverless-rust-plugin/actions)
+[![Coverage Status](https://coveralls.io/repos/github/kaicoh/serverless-rust-plugin/badge.svg?branch=main)](https://coveralls.io/github/kaicoh/serverless-rust-plugin?branch=main)
 
 A [Serverless Framework](https://www.serverless.com/) plugin for [Rust](https://www.rust-lang.org/) using [Cargo Lambda](https://www.cargo-lambda.info/)
 
