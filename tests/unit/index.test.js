@@ -76,6 +76,13 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.srcPath).toEqual(expected);
     });
 
+    it('sets project root directory to "srcPath" if serverless.config.servicePath is undefined', () => {
+      serverless.config.servicePath = undefined;
+      plugin = new ServerlessRustPlugin(serverless, options);
+      const expected = path.join(__dirname, '../..');
+      expect(plugin.srcPath).toEqual(expected);
+    });
+
     it('sets "custom" with "cargoPath" and "useDocker" properties', () => {
       const cargoPath = path.join(plugin.srcPath, 'Cargo.toml');
       expect(plugin.custom).toEqual(expect.objectContaining({
@@ -322,6 +329,22 @@ describe('ServerlessRustPlugin', () => {
 
       plugin = new ServerlessRustPlugin(serverless, options);
       expect(() => plugin.build()).toThrow(/some error/);
+    });
+
+    it('creates target directory if it doesn\'t exist', () => {
+      fs.existsSync = jest.fn(() => false);
+      plugin.build();
+
+      const expectedArg = plugin.deployArtifactDir('release');
+      expect(fs.mkdirSync).toHaveBeenCalledTimes(1);
+      expect(fs.mkdirSync).toHaveBeenCalledWith(expectedArg, { recursive: true });
+    });
+
+    it('does not create target directory if it exists', () => {
+      fs.existsSync = jest.fn(() => true);
+      plugin.build();
+
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
   });
 });
