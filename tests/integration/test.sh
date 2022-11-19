@@ -9,6 +9,8 @@ NC='\033[0m'
 TESTS=0
 FAILED=0
 
+INVOCATION_PATH="http://localhost:9000/2015-03-31/functions/function/invocations"
+
 # Verify that a command succeeds
 function assert_success() {
     MESSAGE="$1"
@@ -45,7 +47,7 @@ function end_tests() {
 function wait_until_docker_running() {
     container_name="$1"
 
-    until [ "$( docker container inspect -f '{{.State.Running}}' $container_name )" == "true" ]
+    until curl -XPOST $INVOCATION_PATH -d '{}' > /dev/null 2>&1
     do
         echo -e "Container is unavailable - sleeping"
         sleep 1
@@ -83,12 +85,13 @@ docker run \
     -v /tmp/lambda:/var/runtime \
     -p 9000:8080 \
     --name=$CONTAINER_NAME \
-    public.ecr.aws/lambda/provided:al2 \
+    --platform linux/arm64/v8 \
+    public.ecr.aws/lambda/provided:al2-arm64 \
     bootstrap
 
 wait_until_docker_running $CONTAINER_NAME
 
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+curl -XPOST $INVOCATION_PATH \
     -d @event.json \
     1> output.json \
     2> stderr.log
