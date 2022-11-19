@@ -30,12 +30,9 @@ class ServerlessRustPlugin {
     this.serverless = serverless;
     this.options = options;
     this.servicePath = this.serverless.config.servicePath || '';
-    // MEMO: In 0.1.0 release, I focus on "package" and "deploy" event.
     this.hooks = {
       'before:package:createDeploymentArtifacts': this.build.bind(this),
       'before:deploy:function:packageFunction': this.build.bind(this),
-      // 'before:offline:start': this.build.bind(this),
-      // 'before:offline:start:init': this.build.bind(this),
     };
 
     if (includeInvokeHook(serverless.version)) {
