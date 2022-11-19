@@ -2,7 +2,7 @@ const R = require('ramda');
 const CargoLambda = require('../../../lib/cargolambda');
 
 describe('CargoLambda', () => {
-  describe('_buildOptions method', () => {
+  describe('method: _buildOptions', () => {
     it('includes --release option when profile is release', () => {
       const options = {
         profile: CargoLambda.profile.release,
@@ -52,7 +52,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('_buildCmd method', () => {
+  describe('method: _buildCmd', () => {
     it('returns "docker" when useDocker is true', () => {
       const options = {
         useDocker: true,
@@ -70,7 +70,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('_buildArgs method', () => {
+  describe('method: _buildArgs', () => {
     it('returns docker run command options when useDocker is true', () => {
       const options = {
         useDocker: true,
@@ -119,7 +119,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('buildCommand method', () => {
+  describe('method: buildCommand', () => {
     it('returns cargo lambda build command', () => {
       const options = {
         useDocker: false,
@@ -132,7 +132,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('howToBuild method', () => {
+  describe('method: howToBuild', () => {
     it('says using docker when useDocker is true', () => {
       const options = {
         useDocker: true,
@@ -151,7 +151,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('build method', () => {
+  describe('method: build', () => {
     let mockSpawn;
     let result;
     let args;
@@ -203,7 +203,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('useZip method', () => {
+  describe('method useZip', () => {
     it('returns true when format is zip', () => {
       const options = {
         format: CargoLambda.format.zip,
@@ -221,7 +221,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('artifactExt method', () => {
+  describe('method: artifactExt', () => {
     it('returns ".zip" when format is zip', () => {
       const options = {
         format: CargoLambda.format.zip,
@@ -239,7 +239,7 @@ describe('CargoLambda', () => {
     });
   });
 
-  describe('artifactPath method', () => {
+  describe('method: artifactPath', () => {
     it('takes away package name if given binary name has', () => {
       const options = {
         format: CargoLambda.format.zip,
