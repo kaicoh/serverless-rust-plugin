@@ -4,44 +4,64 @@ on:
   push:
     branches:
       - main
+      - 'release/v**'
+
   pull_request:
     branches:
       - main
+      - 'release/v**'
 
 jobs:
   unit-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: 16
           cache: npm
+
       - name: NPM Install
         run: npm ci
+
       - name: Lint
         run: npm run lint
+
       - name: Test
         run: npm test
+
+      - name: Publish coverage to Coveralls
+        use: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
   integration-test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
+
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: tests/integration
+
       - name: Install ZigLang
         uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.9.1
+
       - name: Install Cargo Lambda
         uses: zerj9/setup-cargo-lambda@v0.1.0
+
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
@@ -50,8 +70,10 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             tests/integration/package-lock.json
+
       - name: NPM Install
         run: npm ci
+
       - name: Test
         shell: bash
         run: npm run test:integration
