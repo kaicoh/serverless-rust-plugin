@@ -51,3 +51,7 @@ custom:
   rust:
     useDocker: false
 ```
+
+## Sample settings
+
+See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sample).
