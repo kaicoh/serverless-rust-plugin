@@ -56,3 +56,11 @@ custom:
 ## Sample settings
 
 See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sample).
+
+## Usage
+
+### Invoke your lambda locally
+
+```
+$ serverless invoke local -f hello -d '{"firstName":"Mary"}'
+```
