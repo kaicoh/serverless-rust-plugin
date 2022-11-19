@@ -118,36 +118,6 @@ describe('ServerlessRustPlugin', () => {
       expect(Cargo).toHaveBeenCalledTimes(1);
       expect(Cargo).toHaveBeenCalledWith(cargoPath);
     });
-
-    it('calls "CargoLambda" constructor to set "builder" property', () => {
-      expect(CargoLambda).toHaveBeenCalledTimes(1);
-      expect(CargoLambda).toHaveBeenCalledWith(expect.objectContaining({
-        useDocker: true,
-        srcPath: plugin.srcPath,
-        dockerImage: 'calavera/cargo-lambda:latest',
-        profile: 'release',
-        arch: 'x86_64',
-        format: 'zip',
-      }));
-    });
-
-    it('passes "architecture" to CargoLambda constructor if it specifies in provider', () => {
-      serverless.service.provider.architecture = 'arm64';
-      plugin = new ServerlessRustPlugin(serverless, options);
-
-      expect(CargoLambda.mock.lastCall[0]).toEqual(expect.objectContaining({
-        arch: 'arm64',
-      }));
-    });
-
-    it('passes "profile" to CargoLambda constructor if it specifies as custom field in serverless.yml', () => {
-      serverless.service.custom.rust = { cargoProfile: 'debug' };
-      plugin = new ServerlessRustPlugin(serverless, options);
-
-      expect(CargoLambda.mock.lastCall[0]).toEqual(expect.objectContaining({
-        profile: 'debug',
-      }));
-    });
   });
 
   describe('method: log', () => {
@@ -175,6 +145,115 @@ describe('ServerlessRustPlugin', () => {
     it('returns what serverless.service.getAllFunctions returns', () => {
       const expected = expect.arrayContaining(serverless.service.getAllFunctions());
       expect(plugin.functions()).toEqual(expected);
+    });
+  });
+
+  describe('method: providerIsAws', () => {
+    it('returns true if serverless.service.provider.name is "aws"', () => {
+      serverless.service.provider.name = 'aws';
+      expect(plugin.providerIsAws()).toBe(true);
+    });
+
+    it('returns false if serverless.service.provider.name is not "aws"', () => {
+      serverless.service.provider.name = 'azure';
+      expect(plugin.providerIsAws()).toBe(false);
+    });
+  });
+
+  describe('method: buildOptions', () => {
+    describe('returns an object with property "useDocker"', () => {
+      it('is true by default', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          useDocker: true,
+        }));
+      });
+
+      it('is overwritten by custom property in serverless.yml', () => {
+        serverless.service.custom.rust = { useDocker: false };
+        plugin = new ServerlessRustPlugin(serverless, options);
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          useDocker: false,
+        }));
+      });
+    });
+
+    describe('returns an object with property "srcPath"', () => {
+      it('is equal to the project service path', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          srcPath: plugin.srcPath,
+        }));
+      });
+    });
+
+    describe('returns an object with property "dockerImage"', () => {
+      it('is equal to "calavera/cargo-lambda:latest"', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          dockerImage: 'calavera/cargo-lambda:latest',
+        }));
+      });
+    });
+
+    describe('returns an object with property "profile"', () => {
+      it('is equal to "release" by default', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          profile: 'release',
+        }));
+      });
+
+      it('is overwritten by custom property in serverless.yml', () => {
+        serverless.service.custom.rust = { cargoProfile: 'debug' };
+        plugin = new ServerlessRustPlugin(serverless, options);
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          profile: 'debug',
+        }));
+      });
+    });
+
+    describe('returns an object with property "arch"', () => {
+      it('is equal to "x86_64" by default', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          arch: 'x86_64',
+        }));
+      });
+
+      it('is overwritten by provider property in serverless.yml', () => {
+        serverless.service.provider.architecture = 'arm64';
+        plugin = new ServerlessRustPlugin(serverless, options);
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          arch: 'arm64',
+        }));
+      });
+    });
+
+    describe('returns an object with property "format"', () => {
+      it('is equal to "zip"', () => {
+        expect(plugin.buildOptions()).toEqual(expect.objectContaining({
+          format: 'zip',
+        }));
+      });
+    });
+
+    describe('returns an object with any property', () => {
+      it('is overwritten by given arguments', () => {
+        const arg = {
+          useDocker: false,
+          srcPath: 'srcPath',
+          dockerImage: 'sample:1.2.3',
+          profile: 'dev',
+          arch: 'amd64',
+          format: 'binary',
+          foo: 'bar',
+        };
+        expect(plugin.buildOptions(arg)).toEqual(expect.objectContaining({
+          useDocker: false,
+          srcPath: 'srcPath',
+          dockerImage: 'sample:1.2.3',
+          profile: 'dev',
+          arch: 'amd64',
+          format: 'binary',
+          foo: 'bar',
+        }));
+      });
     });
   });
 
@@ -318,55 +397,181 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
+  describe('method: buildZip', () => {
+    beforeEach(() => {
+      plugin.build = jest.fn();
+      plugin.buildOptions = jest.fn(() => ({ foo: 'bar' }));
+    });
+
+    describe('when plugin.providerIsAws returns true', () => {
+      beforeEach(() => {
+        plugin.providerIsAws = jest.fn(() => true);
+      });
+
+      it('calls plugin.buildOptions with format zip option', () => {
+        plugin.buildZip();
+
+        const expected = expect.objectContaining({
+          format: 'zip',
+        });
+        expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
+      });
+
+      it('calls CargoLambda constructor with what plugin.buildOptions returns', () => {
+        plugin.buildZip();
+
+        expect(CargoLambda).toHaveBeenCalledWith({
+          foo: 'bar',
+        });
+      });
+
+      it('calls plugin.build with what CargoLambda constructor returns', () => {
+        CargoLambda.mockImplementationOnce(() => ({
+          foo: 'barbaz',
+        }));
+
+        plugin.buildZip();
+
+        expect(plugin.build).toHaveBeenCalledWith({
+          foo: 'barbaz',
+        });
+      });
+    });
+
+    describe('when plugin.providerIsAws returns false', () => {
+      beforeEach(() => {
+        plugin.providerIsAws = jest.fn(() => false);
+        plugin.buildZip();
+      });
+
+      it('does not call plugin.buildOptions', () => {
+        expect(plugin.buildOptions).not.toHaveBeenCalled();
+      });
+
+      it('does not call CargoLambda constructor', () => {
+        expect(CargoLambda).not.toHaveBeenCalled();
+      });
+
+      it('does not call plugin.build', () => {
+        expect(plugin.build).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('method: buildBinary', () => {
+    beforeEach(() => {
+      plugin.build = jest.fn();
+      plugin.buildOptions = jest.fn(() => ({ foo: 'bar' }));
+    });
+
+    describe('when plugin.providerIsAws returns true', () => {
+      beforeEach(() => {
+        plugin.providerIsAws = jest.fn(() => true);
+      });
+
+      it('calls plugin.buildOptions with format binary option', () => {
+        plugin.buildBinary();
+
+        const expected = expect.objectContaining({
+          format: 'binary',
+        });
+        expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
+      });
+
+      it('calls CargoLambda constructor with what plugin.buildOptions returns', () => {
+        plugin.buildBinary();
+
+        expect(CargoLambda).toHaveBeenCalledWith({
+          foo: 'bar',
+        });
+      });
+
+      it('calls plugin.build with what CargoLambda constructor returns', () => {
+        CargoLambda.mockImplementationOnce(() => ({
+          foo: 'barbaz',
+        }));
+
+        plugin.buildBinary();
+
+        expect(plugin.build).toHaveBeenCalledWith({
+          foo: 'barbaz',
+        });
+      });
+    });
+
+    describe('when plugin.providerIsAws returns false', () => {
+      beforeEach(() => {
+        plugin.providerIsAws = jest.fn(() => false);
+        plugin.buildBinary();
+      });
+
+      it('does not call plugin.buildOptions', () => {
+        expect(plugin.buildOptions).not.toHaveBeenCalled();
+      });
+
+      it('does not call CargoLambda constructor', () => {
+        expect(CargoLambda).not.toHaveBeenCalled();
+      });
+
+      it('does not call plugin.build', () => {
+        expect(plugin.build).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe('method: build', () => {
-    it('does nothing when serverless.service.provider.name is not "aws"', () => {
-      serverless.service.provider.name = 'azure';
-      plugin.build();
-      expect(plugin.builder.build).not.toHaveBeenCalled();
+    let builder;
+
+    beforeEach(() => {
+      // To confirm mock implementation, see above.
+      builder = new CargoLambda();
+
+      plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
+      plugin.log = jest.fn();
+      plugin.deployArtifactDir = jest.fn(() => 'artifact/target');
+      plugin.resetEachPackage = jest.fn();
     });
 
     it('throws an error if there are no rust functions in serverless.yml', () => {
-      serverless.service.getFunction = jest.fn(() => ({ handler: 'non rust func' }));
-      expect(() => plugin.build()).toThrow(/no Rust functions found/);
+      plugin.getRustFunctions = jest.fn(() => []);
+      expect(() => plugin.build(builder)).toThrow(/no Rust functions found/);
     });
 
-    it('calls build method of plugin\'s builder', () => {
-      plugin.build();
-      expect(plugin.builder.build).toHaveBeenCalledTimes(1);
-      expect(plugin.builder.build).toHaveBeenCalledWith(expect.objectContaining({
+    it('calls build method of given builder', () => {
+      plugin.build(builder);
+      expect(builder.build).toHaveBeenCalledTimes(1);
+      expect(builder.build).toHaveBeenCalledWith(expect.objectContaining({
         stdio: ['ignore', process.stdout, process.stderr],
       }));
     });
 
     it('throws an error if builder.build method returns a failed result', () => {
-      CargoLambda.mockImplementationOnce(() => ({
-        buildCommand: jest.fn(() => ['buildCommand', 'output']),
-        howToBuild: jest.fn(() => 'somehow'),
-        build: jest.fn(() => ({ status: 1, error: 'some error' })),
-        useZip: jest.fn(() => true),
-        artifactExt: jest.fn(() => '.js'),
-        artifactPath: jest.fn(() => 'test/path'),
-        profile: 'release',
-      }));
-
-      plugin = new ServerlessRustPlugin(serverless, options);
-      expect(() => plugin.build()).toThrow(/some error/);
+      builder.build = jest.fn(() => ({ status: 1, error: 'some error' }));
+      expect(() => plugin.build(builder)).toThrow(/some error/);
     });
 
     it('creates target directory if it doesn\'t exist', () => {
       fs.existsSync = jest.fn(() => false);
-      plugin.build();
+      plugin.build(builder);
 
-      const expectedArg = plugin.deployArtifactDir('release');
       expect(fs.mkdirSync).toHaveBeenCalledTimes(1);
-      expect(fs.mkdirSync).toHaveBeenCalledWith(expectedArg, { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('artifact/target', { recursive: true });
     });
 
     it('does not create target directory if it exists', () => {
       fs.existsSync = jest.fn(() => true);
-      plugin.build();
+      plugin.build(builder);
 
       expect(fs.mkdirSync).not.toHaveBeenCalled();
+    });
+
+    it('calls plugin resetEachPackage method', () => {
+      plugin.build(builder);
+      expect(plugin.resetEachPackage).toHaveBeenCalledWith({
+        rustFunctions: ['func0', 'func1'],
+        targetDir: 'artifact/target',
+        builder,
+      });
     });
   });
 });

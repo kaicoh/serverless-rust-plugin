@@ -31,12 +31,12 @@ class ServerlessRustPlugin {
     this.options = options;
     this.servicePath = this.serverless.config.servicePath || '';
     this.hooks = {
-      'before:package:createDeploymentArtifacts': this.build.bind(this),
-      'before:deploy:function:packageFunction': this.build.bind(this),
+      'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
+      'before:deploy:function:packageFunction': this.buildZip.bind(this),
     };
 
     if (includeInvokeHook(serverless.version)) {
-      this.hooks['before:invoke:local:invoke'] = this.build.bind(this);
+      this.hooks['before:invoke:local:invoke'] = this.buildZip.bind(this);
     }
 
     this.srcPath = path.resolve(this.servicePath);
@@ -51,18 +51,6 @@ class ServerlessRustPlugin {
     };
 
     this.cargo = new Cargo(this.custom.cargoPath);
-
-    const buildOptions = {
-      useDocker: this.custom.useDocker,
-      srcPath: this.srcPath,
-      dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
-      profile: this.custom.cargoProfile || CargoLambda.profile.release,
-      arch: serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
-      // MEMO: In 0.1.0 release, binary format is disabled.
-      format: CargoLambda.format.zip,
-    };
-
-    this.builder = new CargoLambda(buildOptions);
   }
 
   log(message) {
@@ -75,6 +63,22 @@ class ServerlessRustPlugin {
 
   functions() {
     return this.serverless.service.getAllFunctions();
+  }
+
+  providerIsAws() {
+    return this.serverless.service.provider.name === 'aws';
+  }
+
+  buildOptions(options = {}) {
+    return {
+      useDocker: this.custom.useDocker,
+      srcPath: this.srcPath,
+      dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
+      profile: this.custom.cargoProfile || CargoLambda.profile.release,
+      arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
+      format: CargoLambda.format.zip,
+      ...options,
+    };
   }
 
   getRustFunctions() {
@@ -93,7 +97,7 @@ class ServerlessRustPlugin {
   // But cargo lambda builds all artifacts into same name bootstrap(.zip),
   // so this plugin copies artifacts using each function name and deploys them.
   // See: https://github.com/serverless/serverless/issues/3696
-  resetEachPackage({ rustFunctions, builder, targetDir }) { // builder is an instance of CargoLambda
+  resetEachPackage({ rustFunctions, builder, targetDir }) {
     const { service } = this.serverless;
 
     rustFunctions.forEach((funcName) => {
@@ -115,12 +119,7 @@ class ServerlessRustPlugin {
     });
   }
 
-  build() {
-    const { service } = this.serverless;
-    if (service.provider.name !== 'aws') {
-      return;
-    }
-
+  build(builder) {
     const rustFunctions = this.getRustFunctions();
 
     if (rustFunctions.length === 0) {
@@ -131,24 +130,40 @@ class ServerlessRustPlugin {
       );
     }
 
-    this.log(this.builder.howToBuild());
-    this.log(`Running "${this.builder.buildCommand()}"`);
+    this.log(builder.howToBuild());
+    this.log(`Running "${builder.buildCommand()}"`);
 
-    const result = this.builder.build(NO_OUTPUT_CAPTURE);
+    const result = builder.build(NO_OUTPUT_CAPTURE);
 
     if (result.error || result.status > 0) {
       this.log(`Rust build encountered an error: ${result.error} ${result.status}.`);
       throw new Error(result.error);
     }
 
-    const targetDir = this.deployArtifactDir(this.builder.profile);
+    const targetDir = this.deployArtifactDir(builder.profile);
     mkdirSyncIfNotExist(targetDir);
 
     this.resetEachPackage({
       rustFunctions,
       targetDir,
-      builder: this.builder,
+      builder,
     });
+  }
+
+  buildZip() {
+    if (this.providerIsAws()) {
+      const options = this.buildOptions({ format: CargoLambda.format.zip });
+      const builder = new CargoLambda(options);
+      this.build(builder);
+    }
+  }
+
+  buildBinary() {
+    if (this.providerIsAws()) {
+      const options = this.buildOptions({ format: CargoLambda.format.binary });
+      const builder = new CargoLambda(options);
+      this.build(builder);
+    }
   }
 }
 
