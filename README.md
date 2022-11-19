@@ -64,3 +64,5 @@ See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sampl
 ```
 $ serverless invoke local -f hello -d '{"firstName":"Mary"}'
 ```
+
+For more info about local invocation see [this doc](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local).
