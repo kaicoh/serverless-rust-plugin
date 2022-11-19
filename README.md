@@ -19,7 +19,8 @@ And add the following to your serverless.yml file
 provider:
   name: aws
   runtime: provided.al2
-  # this plugin reads this property and passes it to cargo lambda. default is x86_64.
+  # this plugin reads this property and passes it to cargo lambda.
+  # default is x86_64.
   architecture: arm64
 plugins
   - serverless-rust-plugin
