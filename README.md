@@ -1,7 +1,7 @@
 # serverless-rust-plugin
 
 [![Serverless](http://public.serverless.com/badges/v3.svg)](http://www.serverless.com)
-[![main](https://github.com/kaicoh/serverless-rust-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/kaicoh/serverless-rust-plugin/actions)
+[![main](https://github.com/kaicoh/serverless-rust-plugin/actions/workflows/test.yml/badge.svg)](https://github.com/kaicoh/serverless-rust-plugin/actions)
 
 A [Serverless Framework](https://www.serverless.com/) plugin for [Rust](https://www.rust-lang.org/) using [Cargo Lambda](https://www.cargo-lambda.info/)
 
