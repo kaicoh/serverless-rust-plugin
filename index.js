@@ -70,7 +70,7 @@ class ServerlessRustPlugin {
   //     handler: cargo-cackage-name.bin-name
   //
   //   nonRustFunc:
-  //     handler: non-of-the-abave
+  //     handler: non-of-the-above
   getRustFunctions() {
     const { service } = this.serverless;
     const binaryNames = this.cargo.binaries();
