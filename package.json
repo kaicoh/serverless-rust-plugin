@@ -38,6 +38,9 @@
     "jest": "^29.3.1",
     "ramda": "^0.28.0"
   },
+  "peerDependencies": {
+    "serverless": "3"
+  },
   "files": [
     "lib",
     "index.js",
