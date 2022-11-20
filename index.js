@@ -60,7 +60,7 @@ class ServerlessRustPlugin {
 
   // MEMO:
   // This plugin recognize rust function whether its handler value satisfies the syntax or not.
-  // `[[syntax]]
+  // [[syntax]]
   // functions:
   //   rustFuncOne:
   //     handler: cargo-package-name
@@ -68,8 +68,8 @@ class ServerlessRustPlugin {
   //   rustFuncTwo:
   //     handler: cargo-cackage-name.bin-name
   //
-  //    nonRustFunc:
-  //      handler: non-of-the-abave
+  //   nonRustFunc:
+  //     handler: non-of-the-abave
   getRustFunctions() {
     const { service } = this.serverless;
     const binaryNames = this.cargo.binaries();
