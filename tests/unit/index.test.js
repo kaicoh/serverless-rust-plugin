@@ -72,27 +72,6 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.hooks['before:deploy:function:packageFunction']).toBeDefined();
     });
 
-    it.each([
-      // major, minor
-      [1, 36],
-      [1, 40],
-      [2, 0],
-    ])('doesn\'t set "before:invoke:local:invoke" hook when serverless version is %d.%d.x', (major, minor) => {
-      serverless.version = `${major}.${minor}.x`;
-      plugin = new ServerlessRustPlugin(serverless, options);
-      expect(plugin.hooks['before:invoke:local:invoke']).toBeUndefined();
-    });
-
-    it.each([
-      // major, minor
-      [1, 38],
-      [1, 39],
-    ])('sets "before:invoke:local:invoke" hook when serverless version is %d.%d.x', (major, minor) => {
-      serverless.version = `${major}.${minor}.x`;
-      plugin = new ServerlessRustPlugin(serverless, options);
-      expect(plugin.hooks['before:invoke:local:invoke']).toBeDefined();
-    });
-
     it('sets "srcPath" from serverless.config.servicePath', () => {
       const expected = path.join(indexPath, serverless.config.servicePath);
       expect(plugin.srcPath).toEqual(expected);

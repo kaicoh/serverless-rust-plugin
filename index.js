@@ -18,13 +18,6 @@ function mkdirSyncIfNotExist(dirname) {
   }
 }
 
-function includeInvokeHook(serverlessVersion) {
-  const [major, minor] = serverlessVersion.split('.');
-  const majorVersion = parseInt(major, 10);
-  const minorVersion = parseInt(minor, 10);
-  return majorVersion === 1 && minorVersion >= 38 && minorVersion < 40;
-}
-
 class ServerlessRustPlugin {
   constructor(serverless, options) {
     this.serverless = serverless;
@@ -34,10 +27,6 @@ class ServerlessRustPlugin {
       'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
       'before:deploy:function:packageFunction': this.buildZip.bind(this),
     };
-
-    if (includeInvokeHook(serverless.version)) {
-      this.hooks['before:invoke:local:invoke'] = this.buildZip.bind(this);
-    }
 
     this.srcPath = path.resolve(this.servicePath);
 
