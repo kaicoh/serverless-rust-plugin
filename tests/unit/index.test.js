@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
 const ServerlessRustPlugin = require('../..');
 const Cargo = require('../../lib/cargo');
 const CargoLambda = require('../../lib/cargolambda');
@@ -442,7 +443,7 @@ describe('ServerlessRustPlugin', () => {
     it('calls build method of builder', () => {
       plugin.run(buildOptions);
       expect(builder.build).toHaveBeenCalledTimes(1);
-      expect(builder.build).toHaveBeenCalledWith(expect.objectContaining({
+      expect(builder.build).toHaveBeenCalledWith(spawnSync, expect.objectContaining({
         stdio: ['ignore', process.stdout, process.stderr],
       }));
     });

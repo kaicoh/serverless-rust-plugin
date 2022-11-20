@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 
@@ -143,7 +144,7 @@ class ServerlessRustPlugin {
     this.log.info(builder.howToBuild());
     this.log.info(`Running "${builder.buildCommand()}"`);
 
-    const { result, artifacts } = builder.build(NO_OUTPUT_CAPTURE);
+    const { result, artifacts } = builder.build(spawnSync, NO_OUTPUT_CAPTURE);
 
     if (result.error || result.status > 0) {
       throw this.error(`Rust build encountered an error: ${result.error} ${result.status}.`);

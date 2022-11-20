@@ -73,7 +73,7 @@ assert_success "it installs with npm" \
 
 # integration test `package` command
 assert_success "it packages with serverless" \
-    npx serverless package
+    npx serverless package --verbose
 
 # verify packaged artifact by invoking it using the amazon/aws-lambda-provided:al2 docker image
 unzip -o  \
