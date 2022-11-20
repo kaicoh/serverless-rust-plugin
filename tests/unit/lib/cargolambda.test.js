@@ -128,26 +128,24 @@ describe('CargoLambda', () => {
   describe('method: _artifacts', () => {
     let builder;
 
-    describe('given format is zip', () => {
-      beforeEach(() => {
-        const options = { format: 'zip' };
-        builder = new CargoLambda(cargo, options);
+    beforeEach(() => {
+      const options = { format: 'zip' };
+      builder = new CargoLambda(cargo, options);
 
-        builder.cargo = { binaries: jest.fn(() => ['bin0', 'bin1']) };
-        builder.artifactPath = jest.fn((bin) => `build/${bin}/bootstrap.zip`);
-      });
+      builder.cargo = { binaries: jest.fn(() => ['bin0', 'bin1']) };
+      builder._artifactPath = jest.fn((bin) => `build/${bin}/bootstrap.zip`);
+    });
 
-      it('returns an array containing artifact name and path for zip format', () => {
-        const expected = expect.arrayContaining([{
-          name: 'bin0',
-          path: 'build/bin0/bootstrap.zip',
-        }, {
-          name: 'bin1',
-          path: 'build/bin1/bootstrap.zip',
-        }]);
+    it('returns an array containing artifact name and path', () => {
+      const expected = expect.arrayContaining([{
+        name: 'bin0',
+        path: 'build/bin0/bootstrap.zip',
+      }, {
+        name: 'bin1',
+        path: 'build/bin1/bootstrap.zip',
+      }]);
 
-        expect(builder._artifacts()).toEqual(expected);
-      });
+      expect(builder._artifacts()).toEqual(expected);
     });
   });
 

@@ -52,6 +52,7 @@ describe('ServerlessRustPlugin', () => {
       log: {
         info: jest.fn(),
         success: jest.fn(),
+        notice: jest.fn(),
       },
     };
 
@@ -61,13 +62,16 @@ describe('ServerlessRustPlugin', () => {
   describe('constructor', () => {
     // the path index.js is in.
     const indexPath = path.join(__dirname, '../..');
+    const events = [
+      'before:package:createDeploymentArtifacts',
+      'before:deploy:function:packageFunction',
+      'before:rust:invoke:local:invoke',
+      'rust:invoke:local:invoke',
+      'after:rust:invoke:local:invoke',
+    ];
 
-    it('sets "before:package:createDeploymentArtifacts" hook', () => {
-      expect(plugin.hooks['before:package:createDeploymentArtifacts']).toBeDefined();
-    });
-
-    it('sets "before:deploy:function:packageFunction" hook', () => {
-      expect(plugin.hooks['before:deploy:function:packageFunction']).toBeDefined();
+    it.each(events)('sets "%s" hook', (event) => {
+      expect(plugin.hooks[event]).toBeDefined();
     });
 
     it('sets "srcPath" from serverless.config.servicePath', () => {
@@ -94,6 +98,37 @@ describe('ServerlessRustPlugin', () => {
       const cargoPath = path.join(plugin.srcPath, 'Cargo.toml');
       expect(Cargo).toHaveBeenCalledTimes(1);
       expect(Cargo).toHaveBeenCalledWith(cargoPath);
+    });
+
+    describe('sets commands', () => {
+      describe('rust:invoke:local', () => {
+        let command;
+
+        beforeEach(() => {
+          command = plugin.commands['rust:invoke:local'];
+        });
+
+        it('defines', () => {
+          expect(command).toBeDefined();
+        });
+
+        const lifecycleEvents = ['invoke'];
+
+        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
+          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
+        });
+
+        const cmdOptions = [
+          ['function', { shortcut: 'f', type: 'string', required: true }],
+          ['path', { shortcut: 'p', type: 'string' }],
+          ['data', { shortcut: 'd', type: 'string' }],
+        ];
+
+        it.each(cmdOptions)('has option "%s"', (name, definition) => {
+          const option = command.options[name];
+          expect(option).toEqual(expect.objectContaining(definition));
+        });
+      });
     });
   });
 
@@ -488,6 +523,24 @@ describe('ServerlessRustPlugin', () => {
 
       expect(plugin.modifyFunctions).toHaveBeenCalledTimes(1);
       expect(plugin.modifyFunctions).toHaveBeenCalledWith(expected);
+    });
+  });
+
+  describe('method: beforeInvokeLocal', () => {
+    it('returns undefined', () => {
+      expect(plugin.beforeInvokeLocal()).toBeUndefined();
+    });
+  });
+
+  describe('method: invokeLocal', () => {
+    it('returns undefined', () => {
+      expect(plugin.invokeLocal()).toBeUndefined();
+    });
+  });
+
+  describe('method: afterInvokeLocal', () => {
+    it('returns undefined', () => {
+      expect(plugin.afterInvokeLocal()).toBeUndefined();
     });
   });
 });

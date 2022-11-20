@@ -5,6 +5,8 @@ const fs = require('fs');
 const { spawnSync } = require('child_process');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
+const Docker = require('./lib/docker');
+const { invokeLambda } = require('./lib/request');
 
 const DEFAULT_DOCKER_TAG = 'latest';
 const DEFAULT_DOCKER_IMAGE = 'calavera/cargo-lambda';
@@ -151,7 +153,7 @@ class ServerlessRustPlugin {
     });
   }
 
-  run(options) {
+  cargoLambdaBuild(options) {
     if (this.serverless.service.provider.name !== 'aws') {
       throw this.error('Provider must be "aws" to use this plugin');
     }
@@ -184,6 +186,12 @@ class ServerlessRustPlugin {
       this.log.info(`build artifact: ${artifactPath}`);
     });
 
+    return artifacts;
+  }
+
+  run(options) {
+    const artifacts = this.cargoLambdaBuild(options);
+
     const targetDir = this.deployArtifactDir(options.profile);
     mkdirSyncIfNotExist(targetDir);
 
@@ -207,15 +215,79 @@ class ServerlessRustPlugin {
   }
 
   beforeInvokeLocal() {
-    this.log.notice('lifecycle event: before:rust:invoke:local:invoke');
+    // Exec binary build
+    this.log.info('Execute binary build');
+    const options = this.buildOptions({ format: CargoLambda.format.binary });
+    const artifacts = this.cargoLambdaBuild(options);
+
+    // Find artifact from function name
+    const funcName = this.options.function;
+    const artifact = artifacts.getAll().find(({ name }) => {
+      const func = this.serverless.service.getFunction(funcName);
+
+      if (!func || !func.handler) {
+        throw this.error(`Not found function: ${funcName}`);
+      }
+
+      return func.handler === name;
+    });
+
+    if (!artifact) {
+      throw this.error(`Not found rust function: ${funcName}`);
+    }
+
+    this.log.info('Use this artifact');
+    this.log.info(`  bin: ${artifact.name}`);
+    this.log.info(`  path: ${artifact.path}`);
+
+    // docker run
+    const containerName = 'sls-rust-plugin';
+    this.docker = new Docker({
+      name: containerName,
+      arch: options.arch,
+      bin: path.basename(artifact.path),
+      binDir: path.dirname(artifact.path),
+      port: 9000, // port will be an option.
+    });
+
+    this.log.info('Docker run');
+
+    const result = this.docker.run(spawnSync);
+
+    if (Number.isNaN(result.status) || result.status > 0) {
+      throw this.error(`docker run error: ${result.error} ${result.status}`);
+    }
+
+    this.log.info(`Docker container is running. Name: ${containerName}`);
   }
 
   invokeLocal() {
-    this.log.notice('lifecycle event: rust:invoke:local:invoke');
+    const req = {
+      port: 9000,
+      data: this.options.data,
+      retry: 3,
+    };
+
+    // For readable output, insert a new line to console.
+    process.stderr.write('\n');
+
+    return invokeLambda(req)
+      .then((res) => {
+        this.log.info(res);
+      })
+      .catch((err) => {
+        throw this.error(err);
+      });
   }
 
   afterInvokeLocal() {
-    this.log.notice('lifecycle event: after:rust:invoke:local:invoke');
+    const result = this.docker.stop(spawnSync);
+
+    if (Number.isNaN(result.status) || result.status > 0) {
+      throw this.error(`docker stop error: ${result.error} ${result.status}`);
+    }
+
+    this.log.success('Now docker container has been stopped successfully.');
   }
 }
 
