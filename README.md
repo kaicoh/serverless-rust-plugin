@@ -6,6 +6,10 @@
 
 A [Serverless Framework](https://www.serverless.com/) plugin for [Rust](https://www.rust-lang.org/) using [Cargo Lambda](https://www.cargo-lambda.info/)
 
+## Requirement
+
+This plugin has peer dependency, `serverless framework v3`.
+
 ## Installation
 
 Run this command.
