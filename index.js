@@ -37,9 +37,37 @@ class ServerlessRustPlugin {
     };
     this.cargo = new Cargo(this.custom.cargoPath);
 
+    this.commands = {
+      'rust:invoke:local': {
+        usage: 'Invoke lambda function locally according to architecture defined in provider using docker container.',
+        lifecycleEvents: ['invoke'],
+        options: {
+          function: {
+            usage: 'The name of the function in your service that you want to invoke locally. Required.',
+            shortcut: 'f',
+            type: 'string',
+            required: true,
+          },
+          path: {
+            usage: 'The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service.',
+            shortcut: 'p',
+            type: 'string',
+          },
+          data: {
+            usage: 'String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag.',
+            shortcut: 'd',
+            type: 'string',
+          },
+        },
+      },
+    };
+
     this.hooks = {
       'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
       'before:deploy:function:packageFunction': this.buildZip.bind(this),
+      'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
+      'rust:invoke:local:invoke': this.invokeLocal.bind(this),
+      'after:rust:invoke:local:invoke': this.afterInvokeLocal.bind(this),
     };
   }
 
@@ -176,6 +204,18 @@ class ServerlessRustPlugin {
 
   error(message) {
     return new this.serverless.classes.Error(message);
+  }
+
+  beforeInvokeLocal() {
+    this.log.notice('lifecycle event: before:rust:invoke:local:invoke');
+  }
+
+  invokeLocal() {
+    this.log.notice('lifecycle event: rust:invoke:local:invoke');
+  }
+
+  afterInvokeLocal() {
+    this.log.notice('lifecycle event: after:rust:invoke:local:invoke');
   }
 }
 

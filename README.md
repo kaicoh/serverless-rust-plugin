@@ -72,3 +72,8 @@ $ serverless invoke local -f hello -d '{"firstName":"Mary"}'
 ```
 
 For more info about local invocation see [this doc](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local).
+Or if your local machine installs docker, you can invoke your lambda by the following regardless of the architecture.
+
+```
+$ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
+```
