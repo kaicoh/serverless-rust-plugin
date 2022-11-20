@@ -18,44 +18,32 @@ function mkdirSyncIfNotExist(dirname) {
   }
 }
 
+function copyFile(src, dist) {
+  fs.createReadStream(src).pipe(fs.createWriteStream(dist));
+}
+
 class ServerlessRustPlugin {
-  constructor(serverless, options) {
+  constructor(serverless, options, { log }) {
     this.serverless = serverless;
     this.options = options;
+    this.log = log;
     this.servicePath = this.serverless.config.servicePath || '';
-    this.hooks = {
-      'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
-      'before:deploy:function:packageFunction': this.buildZip.bind(this),
-    };
-
     this.srcPath = path.resolve(this.servicePath);
-
-    // MEMO: Customization for docker is disabled in 0.1.0 release.
     this.custom = {
-      // dockerTag: DEFAULT_DOCKER_TAG,
-      // dockerImage: DEFAULT_DOCKER_IMAGE,
       cargoPath: path.join(this.srcPath, 'Cargo.toml'),
       useDocker: true,
       ...((this.serverless.service.custom && this.serverless.service.custom.rust) || {}),
     };
-
     this.cargo = new Cargo(this.custom.cargoPath);
-  }
 
-  log(message) {
-    this.serverless.cli.log(`[ServerlessRustPlugin]: ${message}`);
+    this.hooks = {
+      'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
+      'before:deploy:function:packageFunction': this.buildZip.bind(this),
+    };
   }
 
   deployArtifactDir(profile) {
     return path.join(this.srcPath, 'target/lambda', profile);
-  }
-
-  functions() {
-    return this.serverless.service.getAllFunctions();
-  }
-
-  providerIsAws() {
-    return this.serverless.service.provider.name === 'aws';
   }
 
   buildOptions(options = {}) {
@@ -70,11 +58,23 @@ class ServerlessRustPlugin {
     };
   }
 
+  // MEMO:
+  // This plugin recognize rust function whether its handler value satisfies the syntax or not.
+  // `[[syntax]]
+  // functions:
+  //   rustFuncOne:
+  //     handler: cargo-package-name
+  //
+  //   rustFuncTwo:
+  //     handler: cargo-cackage-name.bin-name
+  //
+  //    nonRustFunc:
+  //      handler: non-of-the-abave
   getRustFunctions() {
     const { service } = this.serverless;
     const binaryNames = this.cargo.binaries();
 
-    return this.functions().flatMap((funcName) => {
+    return service.getAllFunctions().flatMap((funcName) => {
       const func = service.getFunction(funcName);
       return binaryNames.some((bin) => bin === func.handler) ? funcName : [];
     });
@@ -86,20 +86,34 @@ class ServerlessRustPlugin {
   // But cargo lambda builds all artifacts into same name bootstrap(.zip),
   // so this plugin copies artifacts using each function name and deploys them.
   // See: https://github.com/serverless/serverless/issues/3696
-  resetEachPackage({ rustFunctions, builder, targetDir }) {
+  modifyFunctions({ artifacts, options }) {
     const { service } = this.serverless;
+    const rustFunctions = this.getRustFunctions();
+    const targetDir = this.deployArtifactDir(options.profile);
+
+    const useZip = options.format === CargoLambda.format.zip;
+    const ext = useZip ? '.zip' : '';
+
+    this.log.info('Modify rust function definitions');
 
     rustFunctions.forEach((funcName) => {
       const func = service.getFunction(funcName);
       const binaryName = func.handler;
 
-      const buildArtifactPath = builder.artifactPath(binaryName);
-      const deployArtifactPath = path.join(targetDir, `${funcName}${builder.artifactExt()}`);
+      const buildArtifactPath = artifacts.path(binaryName);
+      const deployArtifactPath = path.join(targetDir, `${funcName}${ext}`);
 
-      fs.createReadStream(buildArtifactPath)
-        .pipe(fs.createWriteStream(deployArtifactPath));
+      copyFile(buildArtifactPath, deployArtifactPath);
 
-      func.handler = builder.useZip() ? 'bootstrap' : path.basename(deployArtifactPath);
+      const handler = useZip ? 'bootstrap' : path.basename(deployArtifactPath);
+
+      this.log.info(funcName);
+      this.log.info(`  handler: ${handler}`);
+      this.log.info('  package:');
+      this.log.info(`    artifact: ${deployArtifactPath}`);
+      this.log.info('    individually: true');
+
+      func.handler = handler;
       func.package = {
         ...(func.package || {}),
         artifact: deployArtifactPath,
@@ -108,51 +122,59 @@ class ServerlessRustPlugin {
     });
   }
 
-  build(builder) {
+  run(options) {
+    if (this.serverless.service.provider.name !== 'aws') {
+      throw this.error('Provider must be "aws" to use this plugin');
+    }
+
     const rustFunctions = this.getRustFunctions();
 
     if (rustFunctions.length === 0) {
-      throw new Error(
+      throw this.error(
         'Error: no Rust functions found. '
         + 'Use "handler: {cargo-package-name}.{bin-name}" or "handler: {cargo-package-name}" '
         + 'in function configuration to use this plugin.',
       );
     }
 
-    this.log(builder.howToBuild());
-    this.log(`Running "${builder.buildCommand()}"`);
+    const builder = new CargoLambda(this.cargo, options);
 
-    const result = builder.build(NO_OUTPUT_CAPTURE);
+    this.log.info('Start Cargo Lambda build');
+    this.log.info(builder.howToBuild());
+    this.log.info(`Running "${builder.buildCommand()}"`);
+
+    const { result, artifacts } = builder.build(NO_OUTPUT_CAPTURE);
 
     if (result.error || result.status > 0) {
-      this.log(`Rust build encountered an error: ${result.error} ${result.status}.`);
-      throw new Error(result.error);
+      throw this.error(`Rust build encountered an error: ${result.error} ${result.status}.`);
     }
 
-    const targetDir = this.deployArtifactDir(builder.profile);
+    this.log.info('Complete Cargo Lambda build');
+
+    artifacts.getAll().forEach(({ path: artifactPath }) => {
+      this.log.info(`build artifact: ${artifactPath}`);
+    });
+
+    const targetDir = this.deployArtifactDir(options.profile);
     mkdirSyncIfNotExist(targetDir);
 
-    this.resetEachPackage({
-      rustFunctions,
-      targetDir,
-      builder,
-    });
+    this.modifyFunctions({ artifacts, options });
+
+    this.log.success('Complete building rust functions');
   }
 
   buildZip() {
-    if (this.providerIsAws()) {
-      const options = this.buildOptions({ format: CargoLambda.format.zip });
-      const builder = new CargoLambda(options);
-      this.build(builder);
-    }
+    const options = this.buildOptions({ format: CargoLambda.format.zip });
+    this.run(options);
   }
 
   buildBinary() {
-    if (this.providerIsAws()) {
-      const options = this.buildOptions({ format: CargoLambda.format.binary });
-      const builder = new CargoLambda(options);
-      this.build(builder);
-    }
+    const options = this.buildOptions({ format: CargoLambda.format.binary });
+    this.run(options);
+  }
+
+  error(message) {
+    return new this.serverless.classes.Error(message);
   }
 }
 

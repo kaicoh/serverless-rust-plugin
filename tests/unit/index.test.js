@@ -15,6 +15,7 @@ describe('ServerlessRustPlugin', () => {
   // Arguments to instantiate ServerlessRustPlugin
   let serverless;
   let options;
+  let utils;
 
   function createMockServerless(custom = {}) {
     return {
@@ -29,6 +30,7 @@ describe('ServerlessRustPlugin', () => {
         custom,
       },
       config: { servicePath: 'sls-service' },
+      classes: { Error },
     };
   }
 
@@ -43,21 +45,16 @@ describe('ServerlessRustPlugin', () => {
       binaries: jest.fn(() => ['bin0', 'bin1']),
     }));
 
-    CargoLambda.mockClear();
-    CargoLambda.mockImplementation(() => ({
-      buildCommand: jest.fn(() => ['buildCommand', 'output']),
-      howToBuild: jest.fn(() => 'somehow'),
-      build: jest.fn(() => ({ status: 0 })),
-      useZip: jest.fn(() => true),
-      artifactExt: jest.fn(() => '.js'),
-      artifactPath: jest.fn(() => 'test/path'),
-      profile: 'release',
-    }));
-
     serverless = createMockServerless();
     options = {};
+    utils = {
+      log: {
+        info: jest.fn(),
+        success: jest.fn(),
+      },
+    };
 
-    plugin = new ServerlessRustPlugin(serverless, options);
+    plugin = new ServerlessRustPlugin(serverless, options, utils);
   });
 
   describe('constructor', () => {
@@ -79,7 +76,7 @@ describe('ServerlessRustPlugin', () => {
 
     it('sets project root directory to "srcPath" if serverless.config.servicePath is undefined', () => {
       serverless.config.servicePath = undefined;
-      plugin = new ServerlessRustPlugin(serverless, options);
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
       const expected = path.join(__dirname, '../..');
       expect(plugin.srcPath).toEqual(expected);
     });
@@ -99,43 +96,10 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: log', () => {
-    beforeEach(() => {
-      plugin.log('this is a log');
-    });
-
-    it('calls serverless.cli.log once', () => {
-      expect(serverless.cli.log).toHaveBeenCalledTimes(1);
-    });
-
-    it('calls serverless.cli.log with prefixed message', () => {
-      expect(serverless.cli.log).toHaveBeenCalledWith('[ServerlessRustPlugin]: this is a log');
-    });
-  });
-
   describe('method: deployArtifactDir', () => {
     it('returns a string concantenating srcPath, target, lambda and given arg', () => {
       const expected = path.join(plugin.srcPath, 'target', 'lambda', 'arg');
       expect(plugin.deployArtifactDir('arg')).toEqual(expected);
-    });
-  });
-
-  describe('method: functions', () => {
-    it('returns what serverless.service.getAllFunctions returns', () => {
-      const expected = expect.arrayContaining(serverless.service.getAllFunctions());
-      expect(plugin.functions()).toEqual(expected);
-    });
-  });
-
-  describe('method: providerIsAws', () => {
-    it('returns true if serverless.service.provider.name is "aws"', () => {
-      serverless.service.provider.name = 'aws';
-      expect(plugin.providerIsAws()).toBe(true);
-    });
-
-    it('returns false if serverless.service.provider.name is not "aws"', () => {
-      serverless.service.provider.name = 'azure';
-      expect(plugin.providerIsAws()).toBe(false);
     });
   });
 
@@ -149,7 +113,7 @@ describe('ServerlessRustPlugin', () => {
 
       it('is overwritten by custom property in serverless.yml', () => {
         serverless.service.custom.rust = { useDocker: false };
-        plugin = new ServerlessRustPlugin(serverless, options);
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
         expect(plugin.buildOptions()).toEqual(expect.objectContaining({
           useDocker: false,
         }));
@@ -181,7 +145,7 @@ describe('ServerlessRustPlugin', () => {
 
       it('is overwritten by custom property in serverless.yml', () => {
         serverless.service.custom.rust = { cargoProfile: 'debug' };
-        plugin = new ServerlessRustPlugin(serverless, options);
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
         expect(plugin.buildOptions()).toEqual(expect.objectContaining({
           profile: 'debug',
         }));
@@ -197,7 +161,7 @@ describe('ServerlessRustPlugin', () => {
 
       it('is overwritten by provider property in serverless.yml', () => {
         serverless.service.provider.architecture = 'arm64';
-        plugin = new ServerlessRustPlugin(serverless, options);
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
         expect(plugin.buildOptions()).toEqual(expect.objectContaining({
           arch: 'arm64',
         }));
@@ -251,7 +215,7 @@ describe('ServerlessRustPlugin', () => {
       // function handler is always equal to one of the binary names.
       serverless.service.getFunction.mockImplementation(() => ({ handler: 'bin1' }));
 
-      plugin = new ServerlessRustPlugin(serverless, options);
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
 
       const result = plugin.getRustFunctions();
       expect(result).toHaveLength(2);
@@ -264,7 +228,7 @@ describe('ServerlessRustPlugin', () => {
       // Only one function handler is equal to one of the binary names.
       serverless.service.getFunction.mockImplementationOnce(() => ({ handler: 'bin0' }));
 
-      plugin = new ServerlessRustPlugin(serverless, options);
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
 
       const result = plugin.getRustFunctions();
       expect(result).toHaveLength(1);
@@ -275,7 +239,7 @@ describe('ServerlessRustPlugin', () => {
       // function handler is not equal to one of the binary names.
       serverless.service.getFunction.mockImplementation(() => ({ handler: 'non rust func' }));
 
-      plugin = new ServerlessRustPlugin(serverless, options);
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
 
       const result = plugin.getRustFunctions();
       expect(result).toHaveLength(0);
@@ -283,18 +247,23 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: resetEachPackage', () => {
+  describe('method: modifyFunctions', () => {
     let functions;
-    let builder;
-
-    const targetDir = 'target';
-    const rustFunctions = ['func0', 'func1'];
+    let artifacts;
+    let buildOptions;
 
     beforeEach(() => {
-      builder = {
-        artifactPath: jest.fn((bin) => `build/artifact/${bin}.zip`),
-        artifactExt: jest.fn(() => '.zip'),
-        useZip: jest.fn(() => true),
+      plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
+      plugin.deployArtifactDir = jest.fn(() => 'deploy/artifact');
+
+      CargoLambda.format = { zip: 'zip' };
+
+      artifacts = {
+        path: jest.fn((bin) => `build/artifact/${bin}.zip`),
+      };
+      buildOptions = {
+        profile: 'release',
+        format: CargoLambda.format.zip,
       };
 
       // Suppose there are 2 rust functions in serverless.yml
@@ -317,7 +286,7 @@ describe('ServerlessRustPlugin', () => {
     });
 
     it('calls "fs.createReadStream" for each rust function', () => {
-      plugin.resetEachPackage({ rustFunctions, builder, targetDir });
+      plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       expect(fs.createReadStream).toHaveBeenCalledTimes(2);
       expect(fs.createReadStream).toHaveBeenNthCalledWith(1, 'build/artifact/bin0.zip');
@@ -325,15 +294,15 @@ describe('ServerlessRustPlugin', () => {
     });
 
     it('calls "fs.createWriteStream" for each rust function', () => {
-      plugin.resetEachPackage({ rustFunctions, builder, targetDir });
+      plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       expect(fs.createWriteStream).toHaveBeenCalledTimes(2);
-      expect(fs.createWriteStream).toHaveBeenNthCalledWith(1, 'target/func0.zip');
-      expect(fs.createWriteStream).toHaveBeenNthCalledWith(2, 'target/func1.zip');
+      expect(fs.createWriteStream).toHaveBeenNthCalledWith(1, 'deploy/artifact/func0.zip');
+      expect(fs.createWriteStream).toHaveBeenNthCalledWith(2, 'deploy/artifact/func1.zip');
     });
 
     it('chages "handler" property to "bootstrap" for each rust function if builder.useZip returns true', () => {
-      plugin.resetEachPackage({ rustFunctions, builder, targetDir });
+      plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       const func0 = functions.get('func0');
       expect(func0.handler).toEqual('bootstrap');
@@ -342,14 +311,16 @@ describe('ServerlessRustPlugin', () => {
       expect(func1.handler).toEqual('bootstrap');
     });
 
-    it('chages "handler" property to binary name for each rust function if builder.useZip returns false', () => {
-      builder = {
-        artifactPath: jest.fn((bin) => `build/artifact/${bin}`),
-        artifactExt: jest.fn(() => ''),
-        useZip: jest.fn(() => false),
+    it('chages "handler" property to binary name for each rust function if format isn\'t zip', () => {
+      artifacts = {
+        path: jest.fn((bin) => `build/artifact/${bin}`),
+      };
+      buildOptions = {
+        profile: 'release',
+        format: 'nonzip',
       };
 
-      plugin.resetEachPackage({ rustFunctions, builder, targetDir });
+      plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       const func0 = functions.get('func0');
       expect(func0.handler).toEqual('func0');
@@ -359,165 +330,117 @@ describe('ServerlessRustPlugin', () => {
     });
 
     it('overwrites "package" definition for each rust function', () => {
-      plugin.resetEachPackage({ rustFunctions, builder, targetDir });
+      plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       const func0 = functions.get('func0');
       expect(func0.package).toEqual(expect.objectContaining({
         foo: 'bar',
         individually: true,
-        artifact: 'target/func0.zip',
+        artifact: 'deploy/artifact/func0.zip',
       }));
 
       const func1 = functions.get('func1');
       expect(func1.package).toEqual(expect.objectContaining({
         individually: true,
-        artifact: 'target/func1.zip',
+        artifact: 'deploy/artifact/func1.zip',
       }));
     });
   });
 
   describe('method: buildZip', () => {
     beforeEach(() => {
-      plugin.build = jest.fn();
+      CargoLambda.format = { zip: 'zip' };
+
       plugin.buildOptions = jest.fn(() => ({ foo: 'bar' }));
+      plugin.run = jest.fn();
+
+      plugin.buildZip();
     });
 
-    describe('when plugin.providerIsAws returns true', () => {
-      beforeEach(() => {
-        plugin.providerIsAws = jest.fn(() => true);
+    it('calls plugin.buildOptions with format zip option', () => {
+      const expected = expect.objectContaining({
+        format: 'zip',
       });
-
-      it('calls plugin.buildOptions with format zip option', () => {
-        plugin.buildZip();
-
-        const expected = expect.objectContaining({
-          format: 'zip',
-        });
-        expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
-      });
-
-      it('calls CargoLambda constructor with what plugin.buildOptions returns', () => {
-        plugin.buildZip();
-
-        expect(CargoLambda).toHaveBeenCalledWith({
-          foo: 'bar',
-        });
-      });
-
-      it('calls plugin.build with what CargoLambda constructor returns', () => {
-        CargoLambda.mockImplementationOnce(() => ({
-          foo: 'barbaz',
-        }));
-
-        plugin.buildZip();
-
-        expect(plugin.build).toHaveBeenCalledWith({
-          foo: 'barbaz',
-        });
-      });
+      expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
     });
 
-    describe('when plugin.providerIsAws returns false', () => {
-      beforeEach(() => {
-        plugin.providerIsAws = jest.fn(() => false);
-        plugin.buildZip();
-      });
-
-      it('does not call plugin.buildOptions', () => {
-        expect(plugin.buildOptions).not.toHaveBeenCalled();
-      });
-
-      it('does not call CargoLambda constructor', () => {
-        expect(CargoLambda).not.toHaveBeenCalled();
-      });
-
-      it('does not call plugin.build', () => {
-        expect(plugin.build).not.toHaveBeenCalled();
+    it('calls plugin.run with what plugin.buildOptions returns', () => {
+      expect(plugin.run).toHaveBeenCalledWith({
+        foo: 'bar',
       });
     });
   });
 
   describe('method: buildBinary', () => {
     beforeEach(() => {
-      plugin.build = jest.fn();
+      CargoLambda.format = { binary: 'binary' };
+
       plugin.buildOptions = jest.fn(() => ({ foo: 'bar' }));
+      plugin.run = jest.fn();
+
+      plugin.buildBinary();
     });
 
-    describe('when plugin.providerIsAws returns true', () => {
-      beforeEach(() => {
-        plugin.providerIsAws = jest.fn(() => true);
+    it('calls plugin.buildOptions with format binary option', () => {
+      const expected = expect.objectContaining({
+        format: 'binary',
       });
-
-      it('calls plugin.buildOptions with format binary option', () => {
-        plugin.buildBinary();
-
-        const expected = expect.objectContaining({
-          format: 'binary',
-        });
-        expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
-      });
-
-      it('calls CargoLambda constructor with what plugin.buildOptions returns', () => {
-        plugin.buildBinary();
-
-        expect(CargoLambda).toHaveBeenCalledWith({
-          foo: 'bar',
-        });
-      });
-
-      it('calls plugin.build with what CargoLambda constructor returns', () => {
-        CargoLambda.mockImplementationOnce(() => ({
-          foo: 'barbaz',
-        }));
-
-        plugin.buildBinary();
-
-        expect(plugin.build).toHaveBeenCalledWith({
-          foo: 'barbaz',
-        });
-      });
+      expect(plugin.buildOptions).toHaveBeenCalledWith(expected);
     });
 
-    describe('when plugin.providerIsAws returns false', () => {
-      beforeEach(() => {
-        plugin.providerIsAws = jest.fn(() => false);
-        plugin.buildBinary();
-      });
-
-      it('does not call plugin.buildOptions', () => {
-        expect(plugin.buildOptions).not.toHaveBeenCalled();
-      });
-
-      it('does not call CargoLambda constructor', () => {
-        expect(CargoLambda).not.toHaveBeenCalled();
-      });
-
-      it('does not call plugin.build', () => {
-        expect(plugin.build).not.toHaveBeenCalled();
+    it('calls plugin.run with what plugin.buildOptions returns', () => {
+      expect(plugin.run).toHaveBeenCalledWith({
+        foo: 'bar',
       });
     });
   });
 
-  describe('method: build', () => {
+  describe('method: run', () => {
+    // An instance of mocked CargoLambda class
     let builder;
+    let buildOptions;
+    let buildOutput;
 
     beforeEach(() => {
-      // To confirm mock implementation, see above.
-      builder = new CargoLambda();
+      buildOptions = {};
+      buildOutput = {
+        result: { status: 0 },
+        artifacts: { getAll: jest.fn(() => [{ path: 'build/target/bin' }]) },
+      };
+
+      CargoLambda.mockClear();
+      CargoLambda.mockImplementation(() => {
+        builder = {
+          buildCommand: jest.fn(() => ['buildCommand', 'output']),
+          howToBuild: jest.fn(() => 'somehow'),
+          build: jest.fn(() => buildOutput),
+        };
+        return builder;
+      });
 
       plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
-      plugin.log = jest.fn();
       plugin.deployArtifactDir = jest.fn(() => 'artifact/target');
-      plugin.resetEachPackage = jest.fn();
+      plugin.modifyFunctions = jest.fn();
+    });
+
+    it('throws an error if provider is not aws', () => {
+      serverless.service.provider.name = 'azuru';
+      expect(() => plugin.run(buildOptions)).toThrow(/Provider must be "aws" to use this plugin/);
     });
 
     it('throws an error if there are no rust functions in serverless.yml', () => {
       plugin.getRustFunctions = jest.fn(() => []);
-      expect(() => plugin.build(builder)).toThrow(/no Rust functions found/);
+      expect(() => plugin.run(buildOptions)).toThrow(/no Rust functions found/);
     });
 
-    it('calls build method of given builder', () => {
-      plugin.build(builder);
+    it('passes buildOptions to CargoLambda constructor', () => {
+      plugin.run(buildOptions);
+      expect(CargoLambda).toHaveBeenCalledTimes(1);
+      expect(CargoLambda).toHaveBeenCalledWith(plugin.cargo, buildOptions);
+    });
+
+    it('calls build method of builder', () => {
+      plugin.run(buildOptions);
       expect(builder.build).toHaveBeenCalledTimes(1);
       expect(builder.build).toHaveBeenCalledWith(expect.objectContaining({
         stdio: ['ignore', process.stdout, process.stderr],
@@ -525,13 +448,23 @@ describe('ServerlessRustPlugin', () => {
     });
 
     it('throws an error if builder.build method returns a failed result', () => {
-      builder.build = jest.fn(() => ({ status: 1, error: 'some error' }));
-      expect(() => plugin.build(builder)).toThrow(/some error/);
+      buildOutput = {
+        result: { status: 1, error: 'some error' },
+        artifacts: { getAll: jest.fn(() => []) },
+      };
+      expect(() => plugin.run(buildOptions)).toThrow(/some error/);
+    });
+
+    it('calls plugin.deployArtifactDir with buildOptions.profile', () => {
+      buildOptions = { profile: 'dev' };
+      plugin.run(buildOptions);
+      expect(plugin.deployArtifactDir).toHaveBeenCalledTimes(1);
+      expect(plugin.deployArtifactDir).toHaveBeenCalledWith('dev');
     });
 
     it('creates target directory if it doesn\'t exist', () => {
       fs.existsSync = jest.fn(() => false);
-      plugin.build(builder);
+      plugin.run(buildOptions);
 
       expect(fs.mkdirSync).toHaveBeenCalledTimes(1);
       expect(fs.mkdirSync).toHaveBeenCalledWith('artifact/target', { recursive: true });
@@ -539,18 +472,21 @@ describe('ServerlessRustPlugin', () => {
 
     it('does not create target directory if it exists', () => {
       fs.existsSync = jest.fn(() => true);
-      plugin.build(builder);
+      plugin.run(buildOptions);
 
       expect(fs.mkdirSync).not.toHaveBeenCalled();
     });
 
-    it('calls plugin resetEachPackage method', () => {
-      plugin.build(builder);
-      expect(plugin.resetEachPackage).toHaveBeenCalledWith({
-        rustFunctions: ['func0', 'func1'],
-        targetDir: 'artifact/target',
-        builder,
+    it('calls plugin.modifyFunctions with build artifacts and buildOptions', () => {
+      plugin.run(buildOptions);
+
+      const expected = expect.objectContaining({
+        artifacts: buildOutput.artifacts,
+        options: buildOptions,
       });
+
+      expect(plugin.modifyFunctions).toHaveBeenCalledTimes(1);
+      expect(plugin.modifyFunctions).toHaveBeenCalledWith(expected);
     });
   });
 });
