@@ -113,4 +113,20 @@ fi
 
 docker stop $CONTAINER_NAME > /dev/null 2>&1
 
+# Local invocation test
+echo "Test rust:invoke:local command"
+npx serverless rust:invoke:local -f hello -p event.json --stdout 1>output.json 2>stderr.log
+
+assert_success "when invoked locally, it produces expected output" \
+    diff output.json expected.json
+
+if [ $STATUS -ne 0 ]
+then
+    echo "### output.json ###"
+    cat output.json
+
+    echo "### curl stderr ###"
+    cat stderr.log
+fi
+
 end_tests

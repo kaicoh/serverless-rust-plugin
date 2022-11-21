@@ -14,6 +14,7 @@ describe('invokeLambda', () => {
       data: { foo: 'bar' },
       retryCount: 0,
       retryInterval: 1000,
+      stdout: false,
     };
 
     reqStream = {
@@ -25,6 +26,7 @@ describe('invokeLambda', () => {
     resStream = new PassThrough();
     resStream.statusCode = 200;
     resStream.headers = { 'content-type': 'application/json' };
+    resStream.pipe = jest.fn();
 
     request = jest.fn((_, callback) => {
       callback(resStream);
@@ -42,6 +44,23 @@ describe('invokeLambda', () => {
     promise = invokeLambda(request, options);
     resStream.emit('error', new Error('some error'));
     await expect(() => promise).rejects.toThrow(/some error/);
+  });
+
+  it('outputs to stderr if option.stdout is false', async () => {
+    promise = invokeLambda(request, options);
+    resStream.emit('end');
+    await promise;
+
+    expect(resStream.pipe).toHaveBeenCalledWith(process.stderr);
+  });
+
+  it('outputs to stdout when option.stdout is true', async () => {
+    options.stdout = true;
+    promise = invokeLambda(request, options);
+    resStream.emit('end');
+    await promise;
+
+    expect(resStream.pipe).toHaveBeenCalledWith(process.stdout);
   });
 
   describe('when http request seccesses', () => {

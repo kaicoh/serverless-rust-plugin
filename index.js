@@ -73,6 +73,10 @@ class ServerlessRustPlugin {
             shortcut: 'd',
             type: 'string',
           },
+          stdout: {
+            usage: 'Outputs to stdout. default is stderr',
+            type: 'boolean',
+          },
         },
       },
     };
@@ -251,10 +255,13 @@ class ServerlessRustPlugin {
   }
 
   invokeOptions() {
+    this.log.info(this.options);
+
     return {
       port: 9000,
       retryCount: 3,
       retryInterval: 1000,
+      stdout: this.options.stdout || false,
       data: {
         ...this.readJsonFile(),
         ...this.strToJSON(this.options.data || '{}'),

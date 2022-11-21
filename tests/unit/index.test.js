@@ -127,6 +127,7 @@ describe('ServerlessRustPlugin', () => {
           ['function', { shortcut: 'f', type: 'string', required: true }],
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
+          ['stdout', { type: 'boolean' }],
         ];
 
         it.each(cmdOptions)('has option "%s"', (name, definition) => {
@@ -705,6 +706,21 @@ describe('ServerlessRustPlugin', () => {
   });
 
   describe('method: invokeOptions', () => {
+    describe('has "stdout" property', () => {
+      it('is set from options.stdout', () => {
+        plugin.options.stdout = true;
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          stdout: true,
+        }));
+      });
+
+      it('is false by default', () => {
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          stdout: false,
+        }));
+      });
+    });
+
     describe('has "data" property', () => {
       beforeEach(() => {
         plugin.options.path = 'some/path';
@@ -736,7 +752,7 @@ describe('ServerlessRustPlugin', () => {
         expect(() => plugin.invokeOptions()).toThrow(/Cannot parse to JSON/);
       });
 
-      describe('returns an object', () => {
+      describe('is an object', () => {
         it('is from a file from the path option and an object from the data option', () => {
           expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
             data: {
