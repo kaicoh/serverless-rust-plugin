@@ -2,11 +2,12 @@
 
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { spawnSync } = require('child_process');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Docker = require('./lib/docker');
-const { invokeLambda } = require('./lib/request');
+const request = require('./lib/request');
 
 const DEFAULT_DOCKER_TAG = 'latest';
 const DEFAULT_DOCKER_IMAGE = 'calavera/cargo-lambda';
@@ -23,6 +24,10 @@ function mkdirSyncIfNotExist(dirname) {
 
 function copyFile(src, dist) {
   fs.createReadStream(src).pipe(fs.createWriteStream(dist));
+}
+
+function hasSpawnError({ status }) {
+  return typeof status !== 'number' || status > 0;
 }
 
 class ServerlessRustPlugin {
@@ -67,9 +72,9 @@ class ServerlessRustPlugin {
     this.hooks = {
       'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
       'before:deploy:function:packageFunction': this.buildZip.bind(this),
-      'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
-      'rust:invoke:local:invoke': this.invokeLocal.bind(this),
-      'after:rust:invoke:local:invoke': this.afterInvokeLocal.bind(this),
+      'before:rust:invoke:local:invoke': this.buildAndStartDocker.bind(this),
+      'rust:invoke:local:invoke': this.requestToDocker.bind(this),
+      'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
     };
   }
 
@@ -214,7 +219,7 @@ class ServerlessRustPlugin {
     return new this.serverless.classes.Error(message);
   }
 
-  beforeInvokeLocal() {
+  buildAndStartDocker() {
     // Exec binary build
     this.log.info('Execute binary build');
     const options = this.buildOptions({ format: CargoLambda.format.binary });
@@ -254,24 +259,25 @@ class ServerlessRustPlugin {
 
     const result = this.docker.run(spawnSync);
 
-    if (Number.isNaN(result.status) || result.status > 0) {
+    if (hasSpawnError(result)) {
       throw this.error(`docker run error: ${result.error} ${result.status}`);
     }
 
     this.log.info(`Docker container is running. Name: ${containerName}`);
   }
 
-  invokeLocal() {
-    const req = {
+  requestToDocker() {
+    const options = {
       port: 9000,
       data: this.options.data,
-      retry: 3,
+      retryCount: 3,
+      retryInterval: 1000,
     };
 
     // For readable output, insert a new line to console.
     process.stderr.write('\n');
 
-    return invokeLambda(req)
+    return request.invokeLambda(http.request, options)
       .then((res) => {
         this.log.info(res);
       })
@@ -280,10 +286,10 @@ class ServerlessRustPlugin {
       });
   }
 
-  afterInvokeLocal() {
+  stopDocker() {
     const result = this.docker.stop(spawnSync);
 
-    if (Number.isNaN(result.status) || result.status > 0) {
+    if (hasSpawnError(result)) {
       throw this.error(`docker stop error: ${result.error} ${result.status}`);
     }
 

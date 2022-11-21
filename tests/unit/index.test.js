@@ -1,13 +1,18 @@
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { spawnSync } = require('child_process');
 const ServerlessRustPlugin = require('../..');
 const Cargo = require('../../lib/cargo');
 const CargoLambda = require('../../lib/cargolambda');
+const Docker = require('../../lib/docker');
+const request = require('../../lib/request');
 
 jest.mock('fs');
 jest.mock('../../lib/cargo');
 jest.mock('../../lib/cargolambda');
+jest.mock('../../lib/docker');
+jest.mock('../../lib/request');
 
 describe('ServerlessRustPlugin', () => {
   // An instance of ServerlessRustPlugin
@@ -431,7 +436,7 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: run', () => {
+  describe('method: cargoLambdaBuild', () => {
     // An instance of mocked CargoLambda class
     let builder;
     let buildOptions;
@@ -455,28 +460,26 @@ describe('ServerlessRustPlugin', () => {
       });
 
       plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
-      plugin.deployArtifactDir = jest.fn(() => 'artifact/target');
-      plugin.modifyFunctions = jest.fn();
     });
 
     it('throws an error if provider is not aws', () => {
       serverless.service.provider.name = 'azuru';
-      expect(() => plugin.run(buildOptions)).toThrow(/Provider must be "aws" to use this plugin/);
+      expect(() => plugin.cargoLambdaBuild(buildOptions)).toThrow(/Provider must be "aws" to use this plugin/);
     });
 
     it('throws an error if there are no rust functions in serverless.yml', () => {
       plugin.getRustFunctions = jest.fn(() => []);
-      expect(() => plugin.run(buildOptions)).toThrow(/no Rust functions found/);
+      expect(() => plugin.cargoLambdaBuild(buildOptions)).toThrow(/no Rust functions found/);
     });
 
     it('passes buildOptions to CargoLambda constructor', () => {
-      plugin.run(buildOptions);
+      plugin.cargoLambdaBuild(buildOptions);
       expect(CargoLambda).toHaveBeenCalledTimes(1);
       expect(CargoLambda).toHaveBeenCalledWith(plugin.cargo, buildOptions);
     });
 
     it('calls build method of builder', () => {
-      plugin.run(buildOptions);
+      plugin.cargoLambdaBuild(buildOptions);
       expect(builder.build).toHaveBeenCalledTimes(1);
       expect(builder.build).toHaveBeenCalledWith(spawnSync, expect.objectContaining({
         stdio: ['ignore', process.stdout, process.stderr],
@@ -488,7 +491,31 @@ describe('ServerlessRustPlugin', () => {
         result: { status: 1, error: 'some error' },
         artifacts: { getAll: jest.fn(() => []) },
       };
-      expect(() => plugin.run(buildOptions)).toThrow(/some error/);
+      expect(() => plugin.cargoLambdaBuild(buildOptions)).toThrow(/some error/);
+    });
+
+    it('returns buildOutput.artifacts', () => {
+      expect(plugin.cargoLambdaBuild(buildOptions)).toEqual(buildOutput.artifacts);
+    });
+  });
+
+  describe('method: run', () => {
+    let buildOptions;
+    let artifacts;
+
+    beforeEach(() => {
+      buildOptions = { foo: 'bar' };
+      artifacts = { bar: 'baz' };
+
+      plugin.cargoLambdaBuild = jest.fn(() => artifacts);
+      plugin.deployArtifactDir = jest.fn(() => 'artifact/target');
+      plugin.modifyFunctions = jest.fn();
+    });
+
+    it('calls plugin.cargoLambdaBuild with buildOptions', () => {
+      plugin.run(buildOptions);
+      expect(plugin.cargoLambdaBuild).toHaveBeenCalledTimes(1);
+      expect(plugin.cargoLambdaBuild).toHaveBeenCalledWith(buildOptions);
     });
 
     it('calls plugin.deployArtifactDir with buildOptions.profile', () => {
@@ -517,7 +544,7 @@ describe('ServerlessRustPlugin', () => {
       plugin.run(buildOptions);
 
       const expected = expect.objectContaining({
-        artifacts: buildOutput.artifacts,
+        artifacts,
         options: buildOptions,
       });
 
@@ -526,21 +553,141 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: beforeInvokeLocal', () => {
-    it('returns undefined', () => {
-      expect(plugin.beforeInvokeLocal()).toBeUndefined();
+  describe('method: buildAndStartDocker', () => {
+    let buildOptions;
+    let artifacts;
+    let docker;
+
+    beforeEach(() => {
+      const bin = 'hello';
+
+      options = { function: 'hello' };
+      serverless.service.getFunction = jest.fn(() => ({ handler: bin }));
+      CargoLambda.format.binary = 'binary format';
+
+      buildOptions = { foo: 'bar' };
+      artifacts = [{ name: bin, path: 'build/artifacts/bin' }];
+
+      Docker.mockClear();
+      Docker.mockImplementation(() => {
+        docker = {
+          run: jest.fn(() => ({ status: 0 })),
+        };
+
+        return docker;
+      });
+
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+      plugin.buildOptions = jest.fn(() => buildOptions);
+      plugin.cargoLambdaBuild = jest.fn(() => ({
+        getAll: () => artifacts,
+      }));
+    });
+
+    it('calls plugin.buildOptions with binary format option', () => {
+      plugin.buildAndStartDocker();
+      expect(plugin.buildOptions).toHaveBeenCalledTimes(1);
+      expect(plugin.buildOptions).toHaveBeenCalledWith({ format: 'binary format' });
+    });
+
+    it('calls plugin.cargoLambdaBuild with what plugin.buildOptions returns', () => {
+      plugin.buildAndStartDocker();
+      expect(plugin.cargoLambdaBuild).toHaveBeenCalledTimes(1);
+      expect(plugin.cargoLambdaBuild).toHaveBeenCalledWith(buildOptions);
+    });
+
+    it('throws an error when no function found from option.function', () => {
+      serverless.service.getFunction = jest.fn(() => undefined);
+      expect(() => plugin.buildAndStartDocker()).toThrow(/Not found function: hello/);
+    });
+
+    it('throws an error when found function doesn\'t have handler property', () => {
+      serverless.service.getFunction = jest.fn(() => {});
+      expect(() => plugin.buildAndStartDocker()).toThrow(/Not found function: hello/);
+    });
+
+    it('throws an error when no rust function found from option.function', () => {
+      serverless.service.getFunction = jest.fn(() => ({ handler: 'non rust func' }));
+      expect(() => plugin.buildAndStartDocker()).toThrow(/Not found rust function: hello/);
+    });
+
+    it('calls docker.run with spawnSync', () => {
+      plugin.buildAndStartDocker();
+      expect(docker.run).toHaveBeenCalledTimes(1);
+      expect(docker.run).toHaveBeenCalledWith(spawnSync);
+    });
+
+    it('throws an error when docker run returns NaN status', () => {
+      Docker.mockImplementationOnce(() => ({
+        run: jest.fn(() => ({})),
+      }));
+      expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
+    });
+
+    it('throws an error when docker run returns error status', () => {
+      Docker.mockImplementationOnce(() => ({
+        run: jest.fn(() => ({ status: 1 })),
+      }));
+      expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
     });
   });
 
-  describe('method: invokeLocal', () => {
-    it('returns undefined', () => {
-      expect(plugin.invokeLocal()).toBeUndefined();
+  describe('method: requestToDocker', () => {
+    beforeEach(async () => {
+      options = { data: 'foobar' };
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+      request.invokeLambda = jest.fn(() => Promise.resolve({ foo: 'bar' }));
+    });
+
+    it('calls request.invokeLambda function', async () => {
+      await plugin.requestToDocker();
+      expect(request.invokeLambda).toHaveBeenCalledTimes(1);
+      expect(request.invokeLambda).toHaveBeenCalledWith(http.request, {
+        port: 9000,
+        data: 'foobar',
+        retryCount: 3,
+        retryInterval: 1000,
+      });
+    });
+
+    it('resolves with undefined', async () => {
+      const result = await plugin.requestToDocker();
+      expect(result).toBeUndefined();
+    });
+
+    it('throws an error when request.invokeLambda rejects', async () => {
+      request.invokeLambda = jest.fn(() => Promise.reject(new Error('foo')));
+      await expect(plugin.requestToDocker()).rejects.toThrow(/foo/);
     });
   });
 
-  describe('method: afterInvokeLocal', () => {
-    it('returns undefined', () => {
-      expect(plugin.afterInvokeLocal()).toBeUndefined();
+  describe('method: stopDocker', () => {
+    beforeEach(() => {
+      plugin.docker = {
+        stop: jest.fn(() => ({ status: 0 })),
+      };
+    });
+
+    it('calls plugin.docker.stop', () => {
+      plugin.stopDocker();
+      expect(plugin.docker.stop).toHaveBeenCalledTimes(1);
+      expect(plugin.docker.stop).toHaveBeenCalledWith(spawnSync);
+    });
+
+    it('throws an error when docker stop returns NaN status', () => {
+      plugin.docker = {
+        stop: jest.fn(() => ({})),
+      };
+      expect(() => plugin.stopDocker()).toThrow(/docker stop error/);
+    });
+
+    it('throws an error when docker stop returns error status', () => {
+      plugin.docker = {
+        stop: jest.fn(() => ({ status: 1 })),
+      };
+      expect(() => plugin.stopDocker()).toThrow(/docker stop error/);
     });
   });
 });
