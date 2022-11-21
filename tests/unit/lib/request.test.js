@@ -11,7 +11,7 @@ describe('invokeLambda', () => {
   beforeEach(() => {
     options = {
       port: 1234,
-      data: '{"foo":"bar"}',
+      data: { foo: 'bar' },
       retryCount: 0,
       retryInterval: 1000,
     };
@@ -36,21 +36,6 @@ describe('invokeLambda', () => {
     if (!resStream.closed) {
       resStream.emit('close');
     }
-  });
-
-  it('requests "{}" as data if it\'s not provided', async () => {
-    options.data = undefined;
-    promise = invokeLambda(request, options);
-    resStream.emit('end');
-
-    await promise;
-    expect(reqStream.write).toHaveBeenCalledTimes(1);
-    expect(reqStream.write).toHaveBeenCalledWith('{}');
-  });
-
-  it('rejects with an error when given data is invalid json', async () => {
-    options = { data: 'foobar' };
-    await expect(() => invokeLambda({}, options)).rejects.toThrow(/Cannot parse to JSON: foobar/);
   });
 
   it('rejects when response stream emits an error', async () => {
@@ -84,9 +69,9 @@ describe('invokeLambda', () => {
       }));
     });
 
-    it('writes data to request stream', () => {
+    it('writes JSON.stringified data to request stream', () => {
       expect(reqStream.write).toHaveBeenCalledTimes(1);
-      expect(reqStream.write).toHaveBeenCalledWith(options.data);
+      expect(reqStream.write).toHaveBeenCalledWith('{"foo":"bar"}');
     });
 
     it('calls end function of request stream', () => {

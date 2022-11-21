@@ -45,6 +45,7 @@ describe('ServerlessRustPlugin', () => {
     fs.mkdirSync = jest.fn();
     fs.createReadStream = jest.fn(() => ({ pipe: jest.fn() }));
     fs.createWriteStream = jest.fn();
+    fs.readFileSync = jest.fn();
 
     Cargo.mockClear();
     Cargo.mockImplementation(() => ({
@@ -635,9 +636,9 @@ describe('ServerlessRustPlugin', () => {
 
   describe('method: requestToDocker', () => {
     beforeEach(async () => {
-      options = { data: 'foobar' };
       plugin = new ServerlessRustPlugin(serverless, options, utils);
 
+      plugin.invokeOptions = jest.fn(() => ({ foo: 'bar' }));
       request.invokeLambda = jest.fn(() => Promise.resolve({ foo: 'bar' }));
     });
 
@@ -645,10 +646,7 @@ describe('ServerlessRustPlugin', () => {
       await plugin.requestToDocker();
       expect(request.invokeLambda).toHaveBeenCalledTimes(1);
       expect(request.invokeLambda).toHaveBeenCalledWith(http.request, {
-        port: 9000,
-        data: 'foobar',
-        retryCount: 3,
-        retryInterval: 1000,
+        foo: 'bar',
       });
     });
 
@@ -688,6 +686,66 @@ describe('ServerlessRustPlugin', () => {
         stop: jest.fn(() => ({ status: 1 })),
       };
       expect(() => plugin.stopDocker()).toThrow(/docker stop error/);
+    });
+  });
+
+  describe('method: readJsonFile', () => {
+    beforeEach(() => {
+      plugin.options.path = 'some/path';
+
+      fs.existsSync = jest.fn(() => true);
+      fs.readFileSync = jest.fn(() => '{"foo":"bar"}');
+    });
+
+    it('returns an object from a file at options.path', () => {
+      expect(plugin.readJsonFile()).toEqual({ foo: 'bar' });
+    });
+
+    it('returns an empty object if options.path is undefined', () => {
+      plugin.options.path = undefined;
+      expect(plugin.readJsonFile()).toEqual({});
+    });
+
+    it('throws an error if file doesn\'t exists at given path', () => {
+      fs.existsSync = jest.fn(() => false);
+      expect(() => plugin.readJsonFile()).toThrow(/File does not exist at/);
+    });
+
+    it('throws an error if file contents is not a valid json', () => {
+      fs.readFileSync = jest.fn(() => 'simple text');
+      expect(() => plugin.readJsonFile()).toThrow(/Cannot parse to JSON/);
+    });
+  });
+
+  describe('method: invokeOptions', () => {
+    describe('has "data" property', () => {
+      beforeEach(() => {
+        plugin.options.data = '{"firstName":"Mary"}';
+        plugin.readJsonFile = jest.fn(() => ({ lastName: 'Sue' }));
+      });
+
+      it('is merged from readJsonfile output and an object from data option', () => {
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          data: {
+            firstName: 'Mary',
+            lastName: 'Sue',
+          },
+        }));
+      });
+
+      it('is what readJsonfile output if data option is undefined', () => {
+        plugin.options.data = undefined;
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          data: {
+            lastName: 'Sue',
+          },
+        }));
+      });
+
+      it('throws an error if data option is invalid json', () => {
+        plugin.options.data = 'simple text';
+        expect(() => plugin.invokeOptions()).toThrow(/Cannot parse to JSON/);
+      });
     });
   });
 });

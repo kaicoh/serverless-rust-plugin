@@ -22,6 +22,14 @@ function mkdirSyncIfNotExist(dirname) {
   }
 }
 
+function readFileSyncIfExist(filePath) {
+  if (fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, 'utf8');
+  }
+
+  return undefined;
+}
+
 function copyFile(src, dist) {
   fs.createReadStream(src).pipe(fs.createWriteStream(dist));
 }
@@ -219,6 +227,41 @@ class ServerlessRustPlugin {
     return new this.serverless.classes.Error(message);
   }
 
+  readJsonFile() {
+    if (!this.options.path) {
+      return {};
+    }
+
+    const filePath = path.resolve(this.srcPath, this.options.path);
+    const fileStr = readFileSyncIfExist(filePath);
+
+    if (!fileStr) {
+      throw this.error(`File does not exist at ${filePath}`);
+    }
+
+    return this.strToJSON(fileStr);
+  }
+
+  strToJSON(str) {
+    try {
+      return JSON.parse(str);
+    } catch (err) {
+      throw this.error(`Cannot parse to JSON: ${str}`);
+    }
+  }
+
+  invokeOptions() {
+    return {
+      port: 9000,
+      retryCount: 3,
+      retryInterval: 1000,
+      data: {
+        ...this.readJsonFile(),
+        ...this.strToJSON(this.options.data || '{}'),
+      },
+    };
+  }
+
   buildAndStartDocker() {
     // Exec binary build
     this.log.info('Execute binary build');
@@ -267,12 +310,7 @@ class ServerlessRustPlugin {
   }
 
   requestToDocker() {
-    const options = {
-      port: 9000,
-      data: this.options.data,
-      retryCount: 3,
-      retryInterval: 1000,
-    };
+    const options = this.invokeOptions();
 
     // For readable output, insert a new line to console.
     process.stderr.write('\n');
