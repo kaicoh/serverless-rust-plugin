@@ -119,6 +119,40 @@ describe('Docker', () => {
     });
   });
 
+  describe('method: running', () => {
+    it('returns true when spawn function returns stdout "true"', () => {
+      const spawn = jest.fn(() => ({ stdout: '"true"' }));
+      expect(dockerArm.running(spawn)).toBe(true);
+    });
+
+    it('returns false when spawn function returns non-string stdout', () => {
+      const spawn = jest.fn(() => ({ stdout: 0 }));
+      expect(dockerArm.running(spawn)).toBe(false);
+    });
+
+    it('returns false when spawn function returns stdout not "true"', () => {
+      const spawn = jest.fn(() => ({ stdout: '"false"' }));
+      expect(dockerArm.running(spawn)).toBe(false);
+    });
+
+    it('calls spawn function with correct arguments', () => {
+      const spawn = jest.fn(() => ({}));
+      const expectedArgs = [
+        'inspect',
+        '--format',
+        '"{{json .State.Running}}"',
+        'Docker arm64',
+      ];
+      dockerArm.running(spawn);
+
+      expect(spawn).toHaveBeenCalledTimes(1);
+      expect(spawn).toHaveBeenCalledWith('docker', expectedArgs, {
+        stdio: [process.stdin, 'pipe', process.stderr],
+        encoding: 'utf-8',
+      });
+    });
+  });
+
   describe('method: stop', () => {
     let spawn;
     let result;

@@ -26,7 +26,6 @@ describe('ServerlessRustPlugin', () => {
   function createMockServerless(custom = {}) {
     return {
       version: '3.24.1',
-      cli: { log: jest.fn() },
       service: {
         provider: {
           name: 'aws',
@@ -100,7 +99,7 @@ describe('ServerlessRustPlugin', () => {
       }));
     });
 
-    it('calls "Cargo" constructor to set "cargo" property', () => {
+    it('instantiates cargo object from Cargo.toml file at the project directory', () => {
       const cargoPath = path.join(plugin.srcPath, 'Cargo.toml');
       expect(Cargo).toHaveBeenCalledTimes(1);
       expect(Cargo).toHaveBeenCalledWith(cargoPath);
@@ -327,19 +326,16 @@ describe('ServerlessRustPlugin', () => {
       serverless.service.getFunction = jest.fn((key) => functions.get(key));
     });
 
-    it('calls "fs.createReadStream" for each rust function', () => {
+    it('copys build artifacts to deploy path for each rust function', () => {
       plugin.modifyFunctions({ artifacts, options: buildOptions });
 
       expect(fs.createReadStream).toHaveBeenCalledTimes(2);
-      expect(fs.createReadStream).toHaveBeenNthCalledWith(1, 'build/artifact/bin0.zip');
-      expect(fs.createReadStream).toHaveBeenNthCalledWith(2, 'build/artifact/bin1.zip');
-    });
-
-    it('calls "fs.createWriteStream" for each rust function', () => {
-      plugin.modifyFunctions({ artifacts, options: buildOptions });
-
       expect(fs.createWriteStream).toHaveBeenCalledTimes(2);
+
+      expect(fs.createReadStream).toHaveBeenNthCalledWith(1, 'build/artifact/bin0.zip');
       expect(fs.createWriteStream).toHaveBeenNthCalledWith(1, 'deploy/artifact/func0.zip');
+
+      expect(fs.createReadStream).toHaveBeenNthCalledWith(2, 'build/artifact/bin1.zip');
       expect(fs.createWriteStream).toHaveBeenNthCalledWith(2, 'deploy/artifact/func1.zip');
     });
 
@@ -665,7 +661,14 @@ describe('ServerlessRustPlugin', () => {
     beforeEach(() => {
       plugin.docker = {
         stop: jest.fn(() => ({ status: 0 })),
+        running: jest.fn(() => true),
       };
+    });
+
+    it('calls plugin.docker.running', () => {
+      plugin.stopDocker();
+      expect(plugin.docker.running).toHaveBeenCalledTimes(1);
+      expect(plugin.docker.running).toHaveBeenCalledWith(spawnSync);
     });
 
     it('calls plugin.docker.stop', () => {
@@ -674,77 +677,175 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.docker.stop).toHaveBeenCalledWith(spawnSync);
     });
 
+    it('calls utils.log.success', () => {
+      plugin.stopDocker();
+      expect(utils.log.success).toHaveBeenCalledTimes(1);
+    });
+
     it('throws an error when docker stop returns NaN status', () => {
-      plugin.docker = {
-        stop: jest.fn(() => ({})),
-      };
+      plugin.docker.stop = jest.fn(() => ({}));
       expect(() => plugin.stopDocker()).toThrow(/docker stop error/);
     });
 
     it('throws an error when docker stop returns error status', () => {
-      plugin.docker = {
-        stop: jest.fn(() => ({ status: 1 })),
-      };
+      plugin.docker.stop = jest.fn(() => ({ status: 1 }));
       expect(() => plugin.stopDocker()).toThrow(/docker stop error/);
     });
-  });
 
-  describe('method: readJsonFile', () => {
-    beforeEach(() => {
-      plugin.options.path = 'some/path';
-
-      fs.existsSync = jest.fn(() => true);
-      fs.readFileSync = jest.fn(() => '{"foo":"bar"}');
+    it('doesn\'t call docker.stop if docker is not running', () => {
+      plugin.docker.running = jest.fn(() => false);
+      plugin.stopDocker();
+      expect(plugin.docker.stop).not.toHaveBeenCalled();
     });
 
-    it('returns an object from a file at options.path', () => {
-      expect(plugin.readJsonFile()).toEqual({ foo: 'bar' });
-    });
-
-    it('returns an empty object if options.path is undefined', () => {
-      plugin.options.path = undefined;
-      expect(plugin.readJsonFile()).toEqual({});
-    });
-
-    it('throws an error if file doesn\'t exists at given path', () => {
-      fs.existsSync = jest.fn(() => false);
-      expect(() => plugin.readJsonFile()).toThrow(/File does not exist at/);
-    });
-
-    it('throws an error if file contents is not a valid json', () => {
-      fs.readFileSync = jest.fn(() => 'simple text');
-      expect(() => plugin.readJsonFile()).toThrow(/Cannot parse to JSON/);
+    it('doesn\'t call utils.log.success if silent option is true', () => {
+      plugin.stopDocker({ silent: true });
+      expect(utils.log.success).not.toHaveBeenCalled();
     });
   });
 
   describe('method: invokeOptions', () => {
     describe('has "data" property', () => {
       beforeEach(() => {
+        plugin.options.path = 'some/path';
         plugin.options.data = '{"firstName":"Mary"}';
-        plugin.readJsonFile = jest.fn(() => ({ lastName: 'Sue' }));
+
+        fs.existsSync = jest.fn(() => true);
+        fs.readFileSync = jest.fn(() => '{"lastName":"Sue"}');
       });
 
-      it('is merged from readJsonfile output and an object from data option', () => {
-        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
-          data: {
-            firstName: 'Mary',
-            lastName: 'Sue',
-          },
-        }));
+      it('reads file at the path option', () => {
+        const expectedPath = path.resolve(plugin.srcPath, 'some/path');
+        plugin.invokeOptions();
+
+        expect(fs.readFileSync).toHaveBeenCalledWith(expectedPath, 'utf8');
       });
 
-      it('is what readJsonfile output if data option is undefined', () => {
-        plugin.options.data = undefined;
-        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
-          data: {
-            lastName: 'Sue',
-          },
-        }));
+      it('throws an error if file doesn\'t exists at given path', () => {
+        fs.existsSync = jest.fn(() => false);
+        expect(() => plugin.readJsonFile()).toThrow(/File does not exist at/);
       });
 
-      it('throws an error if data option is invalid json', () => {
+      it('throws an error if file contents from the path option is not a valid json', () => {
+        fs.readFileSync = jest.fn(() => 'simple text');
+        expect(() => plugin.readJsonFile()).toThrow(/Cannot parse to JSON/);
+      });
+
+      it('throws an error if the data option is invalid json', () => {
         plugin.options.data = 'simple text';
         expect(() => plugin.invokeOptions()).toThrow(/Cannot parse to JSON/);
+      });
+
+      describe('returns an object', () => {
+        it('is from a file from the path option and an object from the data option', () => {
+          expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+            data: {
+              firstName: 'Mary',
+              lastName: 'Sue',
+            },
+          }));
+        });
+
+        it('is from a file from the path option if the data option is undefined', () => {
+          plugin.options.data = undefined;
+          expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+            data: {
+              lastName: 'Sue',
+            },
+          }));
+        });
+
+        it('is from the data option if the path option is undefined', () => {
+          plugin.options.path = undefined;
+          expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+            data: {
+              firstName: 'Mary',
+            },
+          }));
+        });
+
+        it('overwrites data when path file and data has same key', () => {
+          plugin.options.data = '{"firstName":"Mary","zipcode":"0000000"}';
+          fs.readFileSync = jest.fn(() => '{"lastName":"Sue","zipcode":"1111111"}');
+
+          expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+            data: {
+              firstName: 'Mary',
+              lastName: 'Sue',
+              zipcode: '0000000',
+            },
+          }));
+        });
+      });
+    });
+  });
+
+  describe('method: beforeInvokeLocal', () => {
+    describe('when buildAndStartDocker successes', () => {
+      beforeEach(() => {
+        plugin.buildAndStartDocker = jest.fn();
+        plugin.stopDocker = jest.fn();
+      });
+
+      it('calls plugin.buildAndStartDocker', () => {
+        plugin.beforeInvokeLocal();
+        expect(plugin.buildAndStartDocker).toHaveBeenCalled();
+      });
+
+      it('doesn\'t call plugin.stopDocker', () => {
+        plugin.beforeInvokeLocal();
+        expect(plugin.stopDocker).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when buildAndStartDocker fails', () => {
+      beforeEach(() => {
+        plugin.buildAndStartDocker = jest.fn(() => { throw new Error('some error'); });
+        plugin.stopDocker = jest.fn();
+      });
+
+      it('throws an error thrown by buildAndStartDocker', () => {
+        expect(() => plugin.beforeInvokeLocal()).toThrow(/some error/);
+      });
+
+      it('calls plugin.stopDocker with silent option', () => {
+        expect(() => plugin.beforeInvokeLocal()).toThrow(/some error/);
+        expect(plugin.stopDocker).toHaveBeenCalledWith({ silent: true });
+      });
+    });
+  });
+
+  describe('method: invokeLocal', () => {
+    describe('when requestToDocker resolves', () => {
+      beforeEach(() => {
+        plugin.requestToDocker = jest.fn(() => Promise.resolve());
+        plugin.stopDocker = jest.fn();
+      });
+
+      it('calls plugin.requestToDocker', async () => {
+        await plugin.invokeLocal();
+        expect(plugin.requestToDocker).toHaveBeenCalled();
+      });
+
+      it('doesn\'t call plugin.stopDocker', async () => {
+        await plugin.invokeLocal();
+        expect(plugin.stopDocker).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('when requestToDocker rejects', () => {
+      beforeEach(() => {
+        plugin.requestToDocker = jest.fn(() => Promise.reject(new Error('some error')));
+        plugin.stopDocker = jest.fn();
+      });
+
+      it('throws an error thrown by requestToDocker', async () => {
+        await expect(() => plugin.invokeLocal()).rejects.toThrow(/some error/);
+      });
+
+      it('calls plugin.stopDocker with silent option', async () => {
+        await expect(() => plugin.invokeLocal()).rejects.toThrow(/some error/);
+        expect(plugin.stopDocker).toHaveBeenCalledWith({ silent: true });
       });
     });
   });

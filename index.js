@@ -80,8 +80,8 @@ class ServerlessRustPlugin {
     this.hooks = {
       'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
       'before:deploy:function:packageFunction': this.buildZip.bind(this),
-      'before:rust:invoke:local:invoke': this.buildAndStartDocker.bind(this),
-      'rust:invoke:local:invoke': this.requestToDocker.bind(this),
+      'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
+      'rust:invoke:local:invoke': this.invokeLocal.bind(this),
       'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
     };
   }
@@ -309,29 +309,52 @@ class ServerlessRustPlugin {
     this.log.info(`Docker container is running. Name: ${containerName}`);
   }
 
-  requestToDocker() {
+  async requestToDocker() {
     const options = this.invokeOptions();
 
     // For readable output, insert a new line to console.
     process.stderr.write('\n');
 
-    return request.invokeLambda(http.request, options)
-      .then((res) => {
-        this.log.info(res);
-      })
-      .catch((err) => {
-        throw this.error(err);
-      });
+    try {
+      const res = await request.invokeLambda(http.request, options);
+      this.log.info(res);
+    } catch (err) {
+      throw this.error(err);
+    }
   }
 
-  stopDocker() {
-    const result = this.docker.stop(spawnSync);
+  stopDocker({ silent } = { silent: false }) {
+    if (this.docker && this.docker.running(spawnSync)) {
+      const result = this.docker.stop(spawnSync);
 
-    if (hasSpawnError(result)) {
-      throw this.error(`docker stop error: ${result.error} ${result.status}`);
+      if (hasSpawnError(result)) {
+        throw this.error(`docker stop error: ${result.error} ${result.status}`);
+      }
+
+      if (!silent) {
+        this.log.success('Now docker container has been stopped successfully.');
+      }
     }
+  }
 
-    this.log.success('Now docker container has been stopped successfully.');
+  // just a wrapper function needs to stop docker container
+  beforeInvokeLocal() {
+    try {
+      this.buildAndStartDocker();
+    } catch (err) {
+      this.stopDocker({ silent: true });
+      throw err;
+    }
+  }
+
+  // just a wrapper function needs to stop docker container
+  async invokeLocal() {
+    try {
+      await this.requestToDocker();
+    } catch (err) {
+      this.stopDocker({ silent: true });
+      throw err;
+    }
   }
 }
 
