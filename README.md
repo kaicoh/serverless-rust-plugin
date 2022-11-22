@@ -86,6 +86,7 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 | path | p | string |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
 | data | d | string |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
 | env | e | string[] |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
+| port | P | number |  | The port number docker container exposes to accept request. |
 | stdout |  | boolean |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
 #### examples
