@@ -2,12 +2,18 @@ const R = require('ramda');
 const CargoLambda = require('../../../lib/cargolambda');
 
 describe('CargoLambda', () => {
+  let cargo;
+
+  beforeEach(() => {
+    cargo = {};
+  });
+
   describe('method: _buildOptions', () => {
     it('includes --release option when profile is release', () => {
       const options = {
         profile: CargoLambda.profile.release,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--release']));
     });
 
@@ -15,7 +21,7 @@ describe('CargoLambda', () => {
       const options = {
         profile: CargoLambda.profile.debug,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--release']));
     });
 
@@ -23,7 +29,7 @@ describe('CargoLambda', () => {
       const options = {
         format: CargoLambda.format.zip,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--output-format', 'zip']));
     });
 
@@ -31,7 +37,7 @@ describe('CargoLambda', () => {
       const options = {
         format: CargoLambda.format.binary,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--output-format', 'zip']));
     });
 
@@ -39,7 +45,7 @@ describe('CargoLambda', () => {
       const options = {
         arch: CargoLambda.architecture.arm64,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--arm64']));
     });
 
@@ -47,7 +53,7 @@ describe('CargoLambda', () => {
       const options = {
         arch: CargoLambda.architecture.x86_64,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--arm64']));
     });
   });
@@ -57,7 +63,7 @@ describe('CargoLambda', () => {
       const options = {
         useDocker: true,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildCmd()).toEqual('docker');
     });
 
@@ -65,7 +71,7 @@ describe('CargoLambda', () => {
       const options = {
         useDocker: false,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder._buildCmd()).toEqual('cargo');
     });
   });
@@ -80,7 +86,7 @@ describe('CargoLambda', () => {
         arch: 'x86_64',
         format: 'binary',
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       const expecteds = [
         'run',
         '--rm',
@@ -105,7 +111,7 @@ describe('CargoLambda', () => {
         arch: 'arm64',
         format: 'zip',
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       const expecteds = [
         'lambda',
         'build',
@@ -119,6 +125,86 @@ describe('CargoLambda', () => {
     });
   });
 
+  describe('method: _artifacts', () => {
+    let builder;
+
+    beforeEach(() => {
+      const options = { format: 'zip' };
+      builder = new CargoLambda(cargo, options);
+
+      builder.cargo = { binaries: jest.fn(() => ['bin0', 'bin1']) };
+      builder._artifactPath = jest.fn((bin) => `build/${bin}/bootstrap.zip`);
+    });
+
+    it('returns an array containing artifact name and path', () => {
+      const expected = expect.arrayContaining([{
+        name: 'bin0',
+        path: 'build/bin0/bootstrap.zip',
+      }, {
+        name: 'bin1',
+        path: 'build/bin1/bootstrap.zip',
+      }]);
+
+      expect(builder._artifacts()).toEqual(expected);
+    });
+  });
+
+  describe('method _useZip', () => {
+    it('returns true when format is zip', () => {
+      const options = {
+        format: CargoLambda.format.zip,
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._useZip()).toBe(true);
+    });
+
+    it('returns false when format is not zip', () => {
+      const options = {
+        format: CargoLambda.format.binary,
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._useZip()).toBe(false);
+    });
+  });
+
+  describe('method: _artifactExt', () => {
+    it('returns ".zip" when format is zip', () => {
+      const options = {
+        format: CargoLambda.format.zip,
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._artifactExt()).toEqual('.zip');
+    });
+
+    it('returns empty string when format is not zip', () => {
+      const options = {
+        format: CargoLambda.format.binary,
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._artifactExt()).toEqual('');
+    });
+  });
+
+  describe('method: _artifactPath', () => {
+    it('takes away package name if given binary name has', () => {
+      const options = {
+        format: CargoLambda.format.zip,
+        srcPath: 'test/path',
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._artifactPath('package.binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
+    });
+
+    it('uses argument if it does not have package name', () => {
+      const options = {
+        format: CargoLambda.format.zip,
+        srcPath: 'test/path',
+      };
+      const builder = new CargoLambda(cargo, options);
+      expect(builder._artifactPath('binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
+    });
+  });
+
   describe('method: buildCommand', () => {
     it('returns cargo lambda build command', () => {
       const options = {
@@ -127,7 +213,7 @@ describe('CargoLambda', () => {
         arch: 'arm64',
         format: 'zip',
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder.buildCommand()).toEqual('cargo lambda build --release --arm64 --output-format zip');
     });
   });
@@ -138,7 +224,7 @@ describe('CargoLambda', () => {
         useDocker: true,
         dockerImage: 'sample:1.2.3',
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder.howToBuild()).toEqual('Use docker image sample:1.2.3.');
     });
 
@@ -146,116 +232,85 @@ describe('CargoLambda', () => {
       const options = {
         useDocker: false,
       };
-      const builder = new CargoLambda(options);
+      const builder = new CargoLambda(cargo, options);
       expect(builder.howToBuild()).toEqual('Use local cargo-lambda.');
     });
   });
 
   describe('method: build', () => {
+    let builder;
     let mockSpawn;
-    let result;
+    let output;
     let args;
 
     beforeEach(() => {
-      const options = {
-        useDocker: true,
-        srcPath: 'test/path',
-        dockerImage: 'sample:1.2.3',
-        profile: 'release',
-        arch: 'x86_64',
-        format: 'binary',
-      };
-      const builder = new CargoLambda(options);
+      builder = new CargoLambda(cargo, {});
+      builder._buildCmd = jest.fn(() => 'buildCmd');
+      builder._buildArgs = jest.fn(() => ['arg0', 'arg1', 'arg2']);
+      builder._artifacts = jest.fn(() => []);
 
       mockSpawn = jest.fn(() => 'mock return');
-      result = builder.build({ foo: 'bar' }, mockSpawn);
-      args = mockSpawn.mock.lastCall;
-    });
-
-    it('returns what spawn function returns', () => {
-      expect(result).toEqual('mock return');
     });
 
     it('passes _buildCmd output to spawn function as 1st argument', () => {
-      expect(args[0]).toEqual('docker');
+      output = builder.build(mockSpawn, { foo: 'bar' });
+      args = mockSpawn.mock.lastCall;
+
+      expect(args[0]).toEqual('buildCmd');
     });
 
     it('passes _buildArgs output to spawn function as 2nd argument', () => {
-      const expecteds = [
-        'run',
-        '--rm',
-        '-t',
-        '-v',
-        'test/path:/tmp',
-        '-w',
-        '/tmp',
-        'sample:1.2.3',
-        'build',
-        '--release',
-      ];
-      R.zip(args[1], expecteds).forEach(([arg, expected]) => {
+      output = builder.build(mockSpawn, { foo: 'bar' });
+      args = mockSpawn.mock.lastCall;
+
+      R.zip(args[1], ['arg0', 'arg1', 'arg2']).forEach(([arg, expected]) => {
         expect(arg).toEqual(expected);
       });
     });
 
     it('passes 1st argument of itself to spawn function as 3rd argument', () => {
+      output = builder.build(mockSpawn, { foo: 'bar' });
+      args = mockSpawn.mock.lastCall;
+
       expect(args[2]).toEqual(expect.objectContaining({ foo: 'bar' }));
     });
-  });
 
-  describe('method useZip', () => {
-    it('returns true when format is zip', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.useZip()).toBe(true);
-    });
+    describe('returns an object', () => {
+      it('contains "result" property is equal to what spawn function returns', () => {
+        output = builder.build(mockSpawn, { foo: 'bar' });
+        expect(output.result).toEqual('mock return');
+      });
 
-    it('returns false when format is not zip', () => {
-      const options = {
-        format: CargoLambda.format.binary,
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.useZip()).toBe(false);
-    });
-  });
+      describe('contains "artifacts" property', () => {
+        beforeEach(() => {
+          builder._artifacts = jest.fn(() => [{
+            name: 'bin0',
+            path: 'build/bin0/bootstrap.zip',
+          }, {
+            name: 'bin1',
+            path: 'build/bin1/bootstrap.zip',
+          }]);
 
-  describe('method: artifactExt', () => {
-    it('returns ".zip" when format is zip', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.artifactExt()).toEqual('.zip');
-    });
+          output = builder.build(mockSpawn, { foo: 'bar' });
+        });
 
-    it('returns empty string when format is not zip', () => {
-      const options = {
-        format: CargoLambda.format.binary,
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.artifactExt()).toEqual('');
-    });
-  });
+        it('has getAll method to return all artifacts object', () => {
+          const expected = expect.arrayContaining([{
+            name: 'bin0',
+            path: 'build/bin0/bootstrap.zip',
+          }, {
+            name: 'bin1',
+            path: 'build/bin1/bootstrap.zip',
+          }]);
+          expect(output.artifacts.getAll()).toEqual(expected);
+        });
 
-  describe('method: artifactPath', () => {
-    it('takes away package name if given binary name has', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-        srcPath: 'test/path',
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.artifactPath('package.binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
-    });
-
-    it('uses argument if it does not have package name', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-        srcPath: 'test/path',
-      };
-      const builder = new CargoLambda(options);
-      expect(builder.artifactPath('binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
+        it('has path method to return one artifact path', () => {
+          expect(output.artifacts.path('bin0')).toEqual('build/bin0/bootstrap.zip');
+          expect(output.artifacts.path('bin1')).toEqual('build/bin1/bootstrap.zip');
+          expect(output.artifacts.path('bin2')).toBeUndefined();
+        });
+      });
     });
   });
 });
