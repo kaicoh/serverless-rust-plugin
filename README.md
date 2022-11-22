@@ -6,6 +6,10 @@
 
 A [Serverless Framework](https://www.serverless.com/) plugin for [Rust](https://www.rust-lang.org/) using [Cargo Lambda](https://www.cargo-lambda.info/)
 
+## Requirement
+
+This plugin has peer dependency, `serverless framework v3`.
+
 ## Installation
 
 Run this command.
@@ -56,3 +60,45 @@ custom:
 ## Sample settings
 
 See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sample).
+
+## Usage
+
+### Invoke your lambda locally
+
+At the time of writing, you have to choose architecture `x86_64` to run lambda function locally via the following command because serverless framework uses docker image [lambci/lambda](https://hub.docker.com/r/lambci/lambda) whose architecture is `amd64` internally.
+
+```
+$ serverless invoke local -f hello -d '{"firstName":"Mary"}'
+```
+
+For more info about local invocation see [this doc](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local).
+Or if your local machine installs docker, you can invoke your lambda by the following regardless of the architecture.
+
+```
+$ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
+```
+
+#### rust:invoke:local command options
+
+| option | shortcut | type | required | description |
+| :--- | :---: | :--- | :---: | :--- |
+| function | f | string | ✅ | The name of the function in your service that you want to invoke locally. Required. |
+| path | p | string |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
+| data | d | string |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
+| stdout |  | boolean |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
+
+#### examples
+
+##### input from JSON file
+
+```
+$ serverless rust:invoke:local -f hello -p event.json
+{"message":"Hello, Mary!"}
+```
+
+##### pipe outputs to other command
+
+```
+$ serverless rust:invoke:local -f hello -p event.json --stdout 2>/dev/null | jq .message
+"Hello, Mary!"
+```

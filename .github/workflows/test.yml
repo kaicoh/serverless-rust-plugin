@@ -10,6 +10,8 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
 jobs:
   unit-test:
     runs-on: ubuntu-latest
@@ -72,6 +74,9 @@ jobs:
 
       - name: NPM Install
         run: npm ci
+
+      - name: Setup QEMU(For use arm64)
+        uses: docker/setup-qemu-action@v2
 
       - name: Test
         shell: bash

@@ -9,6 +9,8 @@ NC='\033[0m'
 TESTS=0
 FAILED=0
 
+INVOCATION_PATH="http://localhost:9000/2015-03-31/functions/function/invocations"
+
 # Verify that a command succeeds
 function assert_success() {
     MESSAGE="$1"
@@ -45,7 +47,7 @@ function end_tests() {
 function wait_until_docker_running() {
     container_name="$1"
 
-    until [ "$( docker container inspect -f '{{.State.Running}}' $container_name )" == "true" ]
+    until curl -XPOST $INVOCATION_PATH -d '{}' > /dev/null 2>&1
     do
         echo -e "Container is unavailable - sleeping"
         sleep 1
@@ -71,7 +73,7 @@ assert_success "it installs with npm" \
 
 # integration test `package` command
 assert_success "it packages with serverless" \
-    npx serverless package
+    npx serverless package --verbose
 
 # verify packaged artifact by invoking it using the amazon/aws-lambda-provided:al2 docker image
 unzip -o  \
@@ -83,12 +85,13 @@ docker run \
     -v /tmp/lambda:/var/runtime \
     -p 9000:8080 \
     --name=$CONTAINER_NAME \
-    public.ecr.aws/lambda/provided:al2 \
+    --platform linux/arm64/v8 \
+    public.ecr.aws/lambda/provided:al2-arm64 \
     bootstrap
 
 wait_until_docker_running $CONTAINER_NAME
 
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+curl -XPOST $INVOCATION_PATH \
     -d @event.json \
     1> output.json \
     2> stderr.log
@@ -109,5 +112,21 @@ then
 fi
 
 docker stop $CONTAINER_NAME > /dev/null 2>&1
+
+# Local invocation test
+echo "Test rust:invoke:local command"
+npx serverless rust:invoke:local -f hello -p event.json --stdout 1>output.json 2>stderr.log
+
+assert_success "when invoked locally, it produces expected output" \
+    diff output.json expected.json
+
+if [ $STATUS -ne 0 ]
+then
+    echo "### output.json ###"
+    cat output.json
+
+    echo "### sls command stderr ###"
+    cat stderr.log
+fi
 
 end_tests
