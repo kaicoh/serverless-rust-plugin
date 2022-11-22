@@ -84,6 +84,7 @@ docker run \
     -i -d --rm \
     -v /tmp/lambda:/var/runtime \
     -p 9000:8080 \
+    -e GREETING=Good\ morning \
     --name=$CONTAINER_NAME \
     --platform linux/arm64/v8 \
     public.ecr.aws/lambda/provided:al2-arm64 \
@@ -115,7 +116,13 @@ docker stop $CONTAINER_NAME > /dev/null 2>&1
 
 # Local invocation test
 echo "Test rust:invoke:local command"
-npx serverless rust:invoke:local -f hello -p event.json --stdout 1>output.json 2>stderr.log
+npx serverless rust:invoke:local \
+    -f hello \
+    -p event.json \
+    -e GREETING="Good morning" \
+    --stdout \
+    1>output.json \
+    2>stderr.log
 
 assert_success "when invoked locally, it produces expected output" \
     diff output.json expected.json

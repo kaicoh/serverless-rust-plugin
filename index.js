@@ -73,6 +73,11 @@ class ServerlessRustPlugin {
             shortcut: 'd',
             type: 'string',
           },
+          env: {
+            usage: 'String representing an environment variable to set when invoking your function, in the form <name>=<value>. Can be repeated for more than one environment variable.',
+            shortcut: 'e',
+            type: 'multiple',
+          },
           stdout: {
             usage: 'Outputs to stdout. default is stderr',
             type: 'boolean',
@@ -262,6 +267,7 @@ class ServerlessRustPlugin {
       retryCount: 3,
       retryInterval: 1000,
       stdout: this.options.stdout || false,
+      env: this.options.env || [],
       data: {
         ...this.readJsonFile(),
         ...this.strToJSON(this.options.data || '{}'),
@@ -301,6 +307,7 @@ class ServerlessRustPlugin {
       name: containerName,
       arch: options.arch,
       bin: path.basename(artifact.path),
+      env: this.options.env || [],
       binDir: path.dirname(artifact.path),
       port: 9000, // port will be an option.
     });
