@@ -77,3 +77,28 @@ Or if your local machine installs docker, you can invoke your lambda by the foll
 ```
 $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 ```
+
+#### rust:invoke:local command options
+
+| option | shortcut | type | required | description |
+| :--- | :---: | :--- | :---: | :--- |
+| function | f | string | ✅ | The name of the function in your service that you want to invoke locally. Required. |
+| path | p | string |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
+| data | d | string |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
+| stdout |  | boolean |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
+
+#### examples
+
+##### input from JSON file
+
+```
+$ serverless rust:invoke:local -f hello -p event.json
+{"message":"Hello, Mary!"}
+```
+
+##### pipe outputs to other command
+
+```
+$ serverless rust:invoke:local -f hello -p event.json --stdout 2>/dev/null | jq .message
+"Hello, Mary!"
+```

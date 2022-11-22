@@ -125,7 +125,7 @@ then
     echo "### output.json ###"
     cat output.json
 
-    echo "### curl stderr ###"
+    echo "### sls command stderr ###"
     cat stderr.log
 fi
 
