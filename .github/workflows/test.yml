@@ -10,6 +10,8 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
 jobs:
   unit-test:
     runs-on: ubuntu-latest
