@@ -127,6 +127,7 @@ describe('ServerlessRustPlugin', () => {
           ['function', { shortcut: 'f', type: 'string', required: true }],
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
+          ['env', { shortcut: 'e', type: 'multiple' }],
           ['stdout', { type: 'boolean' }],
         ];
 
@@ -628,6 +629,60 @@ describe('ServerlessRustPlugin', () => {
         run: jest.fn(() => ({ status: 1 })),
       }));
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
+    });
+
+    describe('calls Docker constructor', () => {
+      it('has "name" property', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          name: 'sls-rust-plugin',
+        }));
+      });
+
+      it('has "arch" property from buildOptions.arch', () => {
+        plugin.buildOptions = jest.fn(() => ({ arch: 'some arch' }));
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          arch: 'some arch',
+        }));
+      });
+
+      it('has "bin" and "binDir" properties from artifact', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          bin: 'bin',
+          binDir: 'build/artifacts',
+        }));
+      });
+
+      it('has an empty array "env" property if serverless.options.env is undefined', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          env: [],
+        }));
+      });
+
+      it('has "env" property from serverless.options', () => {
+        options.env = ['foo=bar'];
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          env: ['foo=bar'],
+        }));
+      });
+
+      it('has "port" property', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          port: 9000,
+        }));
+      });
     });
   });
 

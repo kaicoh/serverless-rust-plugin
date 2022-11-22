@@ -11,6 +11,7 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.arm64,
       binDir: 'build/arm64',
       bin: 'binArm64',
+      env: [],
       port: 9090,
     });
 
@@ -19,6 +20,7 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.x86_64,
       binDir: 'build/x86_64',
       bin: 'binX86_64',
+      env: [],
       port: 9999,
     });
   });
@@ -92,6 +94,33 @@ describe('Docker', () => {
         'binX86_64',
       ];
       expect(dockerX86._args()).toEqual(expected);
+    });
+
+    describe('when given env options', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        env: [],
+        port: 9090,
+      };
+
+      it('sets env args', () => {
+        const docker = new Docker({ ...options, env: ['foo=bar'] });
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--env',
+          'foo=bar',
+        ]));
+      });
+
+      it('escapes space if the value includes any spaces', () => {
+        const docker = new Docker({ ...options, env: ['foo=bar baz'] });
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--env',
+          'foo=bar\ baz', // eslint-disable-line no-useless-escape
+        ]));
+      });
     });
   });
 
