@@ -52,4 +52,5 @@ runs:
       uses: docker/setup-qemu-action@v2
 
     - name: Install Node Modules
+      shell: bash
       run: npm ci
