@@ -1,6 +1,40 @@
 # Simple Example
 
-This is a example for simple Cargo.toml.
+For single binary.
+
+## Settings
+
+### Cargo.toml
+
+No [[bin]] section.
+
+
+```
+[package]
+name = "simple"
+...
+
+[dependencies]
+lambda_runtime = "0.7"
+...
+```
+
+**serverless.yml**
+
+The `handler` is set to be the cargo package name.
+
+```
+provider:
+  name: aws
+  runtime: provided.al2
+
+plugins:
+  - serverless-rust-plugin
+
+functions:
+  hello:
+    handler: simple
+```
 
 ## Installation
 
@@ -10,7 +44,7 @@ $ npm install
 
 ## Local invocation
 
-### use "data" option
+### "data" option
 
 ```
 $ npx serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
@@ -18,14 +52,14 @@ $ npx serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 
 ```
 
-### use "path" option
+### "path" option
 
 ```
 $ npx serverless rust:invoke:local -f hello -p event.json
 {"greeting":"Good morning","message":"Hi, Mary!","status":"Happy"}
 ```
 
-### use "env" option
+### "env" option
 
 ```
 $ npx serverless rust:invoke:local -f hello -p event.json -e GREETING="Good evening" -e STATUS=Fine

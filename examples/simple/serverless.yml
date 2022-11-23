@@ -1,4 +1,4 @@
-service: integration-test
+service: simple-example
 frameworkVersion: '3'
 
 provider:
