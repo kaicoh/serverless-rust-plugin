@@ -1,5 +1,5 @@
-const Docker = require('../../../lib/docker');
-const CargoLambda = require('../../../lib/cargolambda');
+const Docker = require('../../lib/docker');
+const CargoLambda = require('../../lib/cargolambda');
 
 describe('Docker', () => {
   let dockerArm;

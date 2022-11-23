@@ -2,17 +2,17 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
-const ServerlessRustPlugin = require('../..');
-const Cargo = require('../../lib/cargo');
-const CargoLambda = require('../../lib/cargolambda');
-const Docker = require('../../lib/docker');
-const request = require('../../lib/request');
+const ServerlessRustPlugin = require('..');
+const Cargo = require('../lib/cargo');
+const CargoLambda = require('../lib/cargolambda');
+const Docker = require('../lib/docker');
+const request = require('../lib/request');
 
 jest.mock('fs');
-jest.mock('../../lib/cargo');
-jest.mock('../../lib/cargolambda');
-jest.mock('../../lib/docker');
-jest.mock('../../lib/request');
+jest.mock('../lib/cargo');
+jest.mock('../lib/cargolambda');
+jest.mock('../lib/docker');
+jest.mock('../lib/request');
 
 describe('ServerlessRustPlugin', () => {
   // An instance of ServerlessRustPlugin
@@ -66,7 +66,7 @@ describe('ServerlessRustPlugin', () => {
 
   describe('constructor', () => {
     // the path index.js is in.
-    const indexPath = path.join(__dirname, '../..');
+    const indexPath = path.join(__dirname, '..');
     const events = [
       'before:package:createDeploymentArtifacts',
       'before:deploy:function:packageFunction',
@@ -87,7 +87,7 @@ describe('ServerlessRustPlugin', () => {
     it('sets project root directory to "srcPath" if serverless.config.servicePath is undefined', () => {
       serverless.config.servicePath = undefined;
       plugin = new ServerlessRustPlugin(serverless, options, utils);
-      const expected = path.join(__dirname, '../..');
+      const expected = path.join(__dirname, '..');
       expect(plugin.srcPath).toEqual(expected);
     });
 

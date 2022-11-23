@@ -57,9 +57,9 @@ custom:
     useDocker: false
 ```
 
-## Sample settings
+## Example projects
 
-See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sample).
+See [examples](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples).
 
 ## Usage
 
@@ -91,18 +91,10 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 | network |  | string |  |  | The name of docker network lambda function container is in. |
 | stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
-#### examples
-
-##### input from JSON file
 
 ```
 $ serverless rust:invoke:local -f hello -p event.json
 {"message":"Hello, Mary!"}
 ```
 
-##### pipe outputs to other command
-
-```
-$ serverless rust:invoke:local -f hello -p event.json --stdout 2>/dev/null | jq .message
-"Hello, Mary!"
-```
+Need more examples? See [simple example](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).

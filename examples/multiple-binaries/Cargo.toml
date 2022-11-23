@@ -1,0 +1,18 @@
+[package]
+name = "multiple-binaries"
+version = "0.1.0"
+authors = ["kaicoh <sumireminami@gmail.com>"]
+edition = "2021"
+
+[[bin]]
+name = "first"
+path = "src/first.rs"
+
+[[bin]]
+name = "last"
+path = "src/last.rs"
+
+[dependencies]
+lambda_runtime = "0.7"
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros"] }

@@ -13,7 +13,8 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     let first_name = event["firstName"].as_str().unwrap_or("world");
 
     Ok(json!({
-        "message": format!("Hello, {}!", first_name),
-        "greeting": std::env::var("GREETING").ok(),
+        "message": format!("Hi, {}!", first_name),
+        "greeting": std::env::var("GREETING").ok().unwrap_or("Good morning".to_string()),
+        "status": std::env::var("STATUS").ok().unwrap_or("Happy".to_string()),
     }))
 }

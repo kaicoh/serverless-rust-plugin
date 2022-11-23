@@ -1,5 +1,5 @@
 const { PassThrough } = require('stream');
-const { invokeLambda } = require('../../../lib/request');
+const { invokeLambda } = require('../../lib/request');
 
 describe('invokeLambda', () => {
   let request;
