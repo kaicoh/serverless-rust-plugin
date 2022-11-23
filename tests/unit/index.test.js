@@ -128,7 +128,7 @@ describe('ServerlessRustPlugin', () => {
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
           ['env', { shortcut: 'e', type: 'multiple' }],
-          ['port', { shortcut: 'P', type: 'string', default: '9000' }],
+          ['port', { type: 'string', default: '9000' }],
           ['stdout', { type: 'boolean' }],
         ];
 

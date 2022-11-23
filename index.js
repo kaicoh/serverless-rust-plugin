@@ -80,7 +80,6 @@ class ServerlessRustPlugin {
           },
           port: {
             usage: 'The port number docker container exposes to accept request.',
-            shortcut: 'P',
             type: 'string',
             default: '9000',
           },
