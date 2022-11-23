@@ -78,6 +78,11 @@ class ServerlessRustPlugin {
             shortcut: 'e',
             type: 'multiple',
           },
+          port: {
+            usage: 'The port number docker container exposes to accept request.',
+            type: 'string',
+            default: '9000',
+          },
           stdout: {
             usage: 'Outputs to stdout. default is stderr',
             type: 'boolean',
@@ -259,11 +264,21 @@ class ServerlessRustPlugin {
     }
   }
 
+  dockerPort() {
+    const port = parseInt(this.options.port, 10);
+
+    if (Number.isNaN(port)) {
+      throw this.error(`port must be an integer: ${this.options.port}`);
+    }
+
+    return port;
+  }
+
   invokeOptions() {
     this.log.info(this.options);
 
     return {
-      port: 9000,
+      port: this.dockerPort(),
       retryCount: 3,
       retryInterval: 1000,
       stdout: this.options.stdout || false,
@@ -309,10 +324,10 @@ class ServerlessRustPlugin {
       bin: path.basename(artifact.path),
       env: this.options.env || [],
       binDir: path.dirname(artifact.path),
-      port: 9000, // port will be an option.
+      port: this.dockerPort(),
     });
 
-    this.log.info('Docker run');
+    this.log.info(`Docker run: ${this.docker.runCommand()}`);
 
     const result = this.docker.run(spawnSync);
 
