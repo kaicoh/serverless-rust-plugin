@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "test:integration": "cd tests/integration && ./test.sh",
+    "test:integration": "cd examples && ./testAll.sh",
     "lint": "eslint index.js lib tests"
   },
   "repository": {
