@@ -1,5 +1,5 @@
 const R = require('ramda');
-const CargoLambda = require('../../../lib/cargolambda');
+const CargoLambda = require('../../lib/cargolambda');
 
 describe('CargoLambda', () => {
   let cargo;

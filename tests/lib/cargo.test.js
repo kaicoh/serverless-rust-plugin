@@ -1,5 +1,5 @@
 const path = require('path');
-const Cargo = require('../../../lib/cargo');
+const Cargo = require('../../lib/cargo');
 
 describe('Cargo instance', () => {
   let cargo;
