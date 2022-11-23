@@ -41,6 +41,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   integration-test:
+    strategy:
+      matrix:
+        project: [simple, multiple-binaries]
+
     runs-on: ubuntu-latest
 
     steps:
@@ -50,8 +54,13 @@ jobs:
       - name: Setup Integration Test
         uses: ./.github/actions/integration_test
         with:
-          cargo-path: tests/integration
-          node-cache-path: tests/integration/package-lock.json
+          cargo-path: examples/${{ matrix.project }}
+          node-cache-path: examples/${{ matrix.project }}/package-lock.json
+
+      - name: Change Directory
+        shell: bash
+        run: cd examples/${{ matrix.project }}
 
       - name: Test
-        run: npm run test:integration
+        shell: bash
+        run: ./test.sh
