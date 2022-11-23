@@ -47,37 +47,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Integration Test
+        uses: ./.github/actions/integration_test
         with:
-          workspaces: tests/integration
-
-      - name: Install ZigLang
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.9.1
-
-      - name: Install Cargo Lambda
-        uses: zerj9/setup-cargo-lambda@v0.1.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            tests/integration/package-lock.json
-
-      - name: NPM Install
-        run: npm ci
-
-      - name: Setup QEMU(For use arm64)
-        uses: docker/setup-qemu-action@v2
+          cargo-path: tests/integration
+          node-cache-path: tests/integration/package-lock.json
 
       - name: Test
-        shell: bash
         run: npm run test:integration
