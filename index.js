@@ -83,8 +83,12 @@ class ServerlessRustPlugin {
             type: 'string',
             default: '9000',
           },
+          network: {
+            usage: 'The name of docker network lambda function container is in.',
+            type: 'string',
+          },
           stdout: {
-            usage: 'Outputs to stdout. default is stderr',
+            usage: 'The lambda function outputs to stdout. default is stderr',
             type: 'boolean',
           },
         },
@@ -275,8 +279,6 @@ class ServerlessRustPlugin {
   }
 
   invokeOptions() {
-    this.log.info(this.options);
-
     return {
       port: this.dockerPort(),
       retryCount: 3,
@@ -325,6 +327,7 @@ class ServerlessRustPlugin {
       env: this.options.env || [],
       binDir: path.dirname(artifact.path),
       port: this.dockerPort(),
+      network: this.options.network,
     });
 
     this.log.info(`Docker run: ${this.docker.runCommand()}`);
@@ -368,6 +371,8 @@ class ServerlessRustPlugin {
 
   // just a wrapper function needs to stop docker container
   beforeInvokeLocal() {
+    this.log.info(this.options);
+
     try {
       this.buildAndStartDocker();
     } catch (err) {

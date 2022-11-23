@@ -96,7 +96,7 @@ describe('Docker', () => {
       expect(dockerX86._args()).toEqual(expected);
     });
 
-    describe('when given env options', () => {
+    describe('when given env option', () => {
       const options = {
         name: 'Docker arm64',
         arch: CargoLambda.architecture.arm64,
@@ -119,6 +119,26 @@ describe('Docker', () => {
         expect(docker._args()).toEqual(expect.arrayContaining([
           '--env',
           'foo=bar\ baz', // eslint-disable-line no-useless-escape
+        ]));
+      });
+    });
+
+    describe('when given network option', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        env: [],
+        network: 'serverless-rust-plugin',
+        port: 9090,
+      };
+
+      it('sets network args', () => {
+        const docker = new Docker(options);
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--network',
+          'serverless-rust-plugin',
         ]));
       });
     });

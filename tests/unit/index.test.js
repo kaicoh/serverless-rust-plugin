@@ -129,6 +129,7 @@ describe('ServerlessRustPlugin', () => {
           ['data', { shortcut: 'd', type: 'string' }],
           ['env', { shortcut: 'e', type: 'multiple' }],
           ['port', { type: 'string', default: '9000' }],
+          ['network', { type: 'string' }],
           ['stdout', { type: 'boolean' }],
         ];
 
@@ -561,7 +562,12 @@ describe('ServerlessRustPlugin', () => {
     beforeEach(() => {
       const bin = 'hello';
 
-      options = { function: 'hello', port: '9000' };
+      options = {
+        function: 'hello',
+        port: '9000',
+        network: 'docker-network',
+      };
+
       serverless.service.getFunction = jest.fn(() => ({ handler: bin }));
       CargoLambda.format.binary = 'binary format';
 
@@ -635,7 +641,7 @@ describe('ServerlessRustPlugin', () => {
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
     });
 
-    describe('calls Docker constructor', () => {
+    describe('calls Docker constructor with options object', () => {
       it('has "name" property', () => {
         plugin.buildAndStartDocker();
         expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
@@ -656,6 +662,13 @@ describe('ServerlessRustPlugin', () => {
         expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
           bin: 'bin',
           binDir: 'build/artifacts',
+        }));
+      });
+
+      it('has "network" property from options object', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          network: 'docker-network',
         }));
       });
 
