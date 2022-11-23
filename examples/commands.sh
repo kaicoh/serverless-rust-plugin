@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 
-# decor
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-NC='\033[0m'
+function start_tests() {
+    # decor
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m'
 
-# test state
-TESTS=0
-FAILED=0
-
-INVOCATION_PATH="http://localhost:9000/2015-03-31/functions/function/invocations"
-RETRY=30
+    # test suit
+    TESTS=0
+    FAILED=0
+}
 
 # Verify that a command succeeds
 function assert_success() {
@@ -45,7 +44,40 @@ function end_tests() {
     fi
 }
 
-function wait_until_docker_running() {
+function show_outputs() {
+    for file in "$@"
+    do
+        echo
+        echo "##### ${file} #####"
+        cat $file
+        echo
+    done
+}
+
+# verify packaged artifact by invoking it using the amazon/aws-lambda-provided:al2 docker image
+function test_package() {
+    CONTAINER_NAME="serverless-rust-plugin"
+    INVOCATION_PATH="http://localhost:9000/2015-03-31/functions/function/invocations"
+
+    package="$1"
+    event="$2"
+
+    unzip -o  \
+        target/lambda/release/${package}.zip \
+        -d /tmp/lambda > /dev/null 2>&1
+
+    docker run \
+        -i -d --rm \
+        -v /tmp/lambda:/var/runtime \
+        -p 9000:8080 \
+        --name=$CONTAINER_NAME \
+        --platform linux/arm64/v8 \
+        public.ecr.aws/lambda/provided:al2-arm64 \
+        bootstrap
+
+    RETRY=30
+
+    # wait until docker container running
     until curl -XPOST $INVOCATION_PATH -d '{"health":true}' > /dev/null 2>&1
     do
         ((--RETRY))
@@ -59,14 +91,13 @@ function wait_until_docker_running() {
             exit 1
         fi
     done
-}
 
-function show_outputs() {
-    for file in "$@"
-    do
-        echo
-        echo "##### ${file} #####"
-        cat $file
-        echo
-    done
+    curl -XPOST $INVOCATION_PATH \
+        -d @${event} \
+        1> output.json \
+        2> stderr.log
+
+    docker logs $CONTAINER_NAME > docker.log 2>&1
+
+    docker stop $CONTAINER_NAME > /dev/null 2>&1
 }

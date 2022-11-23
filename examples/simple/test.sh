@@ -2,54 +2,30 @@
 
 source ../commands.sh
 
+if [ "$RUN_ALL" != "true" ]
+then
+    start_tests
+fi
+
 # install build deps
-assert_success "it installs with npm" \
-    npm i -D --silent
+echo "npm i -D --silent"
+npm i -D --silent
 
 ##############################################
 #  Packaging test
 ##############################################
-CONTAINER_NAME="packaging-test"
-
 assert_success "it packages with serverless" \
     npx serverless package
 
-# verify packaged artifact by invoking it using the amazon/aws-lambda-provided:al2 docker image
-unzip -o  \
-    target/lambda/release/hello.zip \
-    -d /tmp/lambda > /dev/null 2>&1
+test_package hello event.json
 
-docker run \
-    -i -d --rm \
-    -v /tmp/lambda:/var/runtime \
-    -p 9000:8080 \
-    -e GREETING=Good\ morning \
-    --name=$CONTAINER_NAME \
-    --platform linux/arm64/v8 \
-    public.ecr.aws/lambda/provided:al2-arm64 \
-    bootstrap
-
-wait_until_docker_running
-
-curl -XPOST $INVOCATION_PATH \
-    -d @event.json \
-    1> output.json \
-    2> stderr.log
-
-assert_success "when invoked from package, it produces expected output" \
+assert_success "when invoked from package \"hello\", it produces expected output" \
     diff output.json expects/package.json
 
 if [ $STATUS -ne 0 ]
 then
-    echo
-    echo "##### docker logs #####"
-    docker logs $CONTAINER_NAME
-    echo
-
-    show_outputs output.json stderr.log
+    show_outputs output.json stderr.log docker.log
 fi
-
-docker stop $CONTAINER_NAME > /dev/null 2>&1
 
 ####################################
 #  Local invocation test
@@ -109,4 +85,7 @@ then
     show_outputs output.json stderr.log
 fi
 
-end_tests
+if [ "$RUN_ALL" != "true" ]
+then
+    end_tests
+fi

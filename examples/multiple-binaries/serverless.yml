@@ -1,0 +1,24 @@
+service: multi-bin-example
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2
+  memorySize: 128
+  architecture: arm64
+
+plugins:
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    useDocker: false
+
+functions:
+  useFirstName:
+    name: useFirstName
+    handler: multiple-binaries.first
+
+  useLastName:
+    name: useLastName
+    handler: multiple-binaries.last
