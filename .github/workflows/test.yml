@@ -57,10 +57,8 @@ jobs:
           cargo-path: examples/${{ matrix.project }}
           node-cache-path: examples/${{ matrix.project }}/package-lock.json
 
-      - name: Change Directory
-        shell: bash
-        run: cd examples/${{ matrix.project }}
-
       - name: Test
         shell: bash
-        run: ./test.sh
+        run: |
+          cd examples/${{ matrix.project }}
+          ./test.sh
