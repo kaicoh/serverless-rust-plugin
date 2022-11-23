@@ -128,7 +128,7 @@ class ServerlessRustPlugin {
   //     handler: cargo-package-name
   //
   //   rustFuncTwo:
-  //     handler: cargo-cackage-name.bin-name
+  //     handler: cargo-package-name.bin-name
   //
   //   nonRustFunc:
   //     handler: non-of-the-above
