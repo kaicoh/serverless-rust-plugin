@@ -148,6 +148,13 @@ describe('Docker', () => {
     });
   });
 
+  describe('method: runCommand', () => {
+    it('shows a docker run command with given options', () => {
+      dockerArm._args = jest.fn(() => ['foo', 'bar']);
+      expect(dockerArm.runCommand()).toEqual('docker run foo bar');
+    });
+  });
+
   describe('method: running', () => {
     it('returns true when spawn function returns stdout "true"', () => {
       const spawn = jest.fn(() => ({ stdout: '"true"' }));

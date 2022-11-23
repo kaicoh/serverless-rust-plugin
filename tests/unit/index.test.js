@@ -128,6 +128,7 @@ describe('ServerlessRustPlugin', () => {
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
           ['env', { shortcut: 'e', type: 'multiple' }],
+          ['port', { shortcut: 'P', type: 'string', default: '9000' }],
           ['stdout', { type: 'boolean' }],
         ];
 
@@ -560,7 +561,7 @@ describe('ServerlessRustPlugin', () => {
     beforeEach(() => {
       const bin = 'hello';
 
-      options = { function: 'hello' };
+      options = { function: 'hello', port: '9000' };
       serverless.service.getFunction = jest.fn(() => ({ handler: bin }));
       CargoLambda.format.binary = 'binary format';
 
@@ -571,6 +572,7 @@ describe('ServerlessRustPlugin', () => {
       Docker.mockImplementation(() => {
         docker = {
           run: jest.fn(() => ({ status: 0 })),
+          runCommand: jest.fn(),
         };
 
         return docker;
@@ -620,6 +622,7 @@ describe('ServerlessRustPlugin', () => {
     it('throws an error when docker run returns NaN status', () => {
       Docker.mockImplementationOnce(() => ({
         run: jest.fn(() => ({})),
+        runCommand: jest.fn(),
       }));
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
     });
@@ -627,6 +630,7 @@ describe('ServerlessRustPlugin', () => {
     it('throws an error when docker run returns error status', () => {
       Docker.mockImplementationOnce(() => ({
         run: jest.fn(() => ({ status: 1 })),
+        runCommand: jest.fn(),
       }));
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
     });
@@ -677,11 +681,31 @@ describe('ServerlessRustPlugin', () => {
         }));
       });
 
-      it('has "port" property', () => {
+      it('has "port" property from serverless.options', () => {
+        options.port = '8080';
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
         plugin.buildAndStartDocker();
         expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
-          port: 9000,
+          port: 8080,
         }));
+      });
+
+      it('thows an error if port option is not a number', () => {
+        options.port = 'not a number';
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
+        expect(() => plugin.buildAndStartDocker()).toThrow(/port must be an integer/);
       });
     });
   });
@@ -761,6 +785,10 @@ describe('ServerlessRustPlugin', () => {
   });
 
   describe('method: invokeOptions', () => {
+    beforeEach(() => {
+      plugin.options.port = '9000';
+    });
+
     describe('has "stdout" property', () => {
       it('is set from options.stdout', () => {
         plugin.options.stdout = true;
@@ -847,6 +875,23 @@ describe('ServerlessRustPlugin', () => {
             },
           }));
         });
+      });
+    });
+
+    describe('has "port" property', () => {
+      beforeEach(() => {
+        plugin.options.port = '8080';
+      });
+
+      it('is from options.port', () => {
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          port: 8080,
+        }));
+      });
+
+      it('throws an error if port options is not a number', () => {
+        plugin.options.port = 'not a number';
+        expect(() => plugin.invokeOptions()).toThrow(/port must be an integer/);
       });
     });
   });
