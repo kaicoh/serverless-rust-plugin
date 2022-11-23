@@ -18,7 +18,7 @@ lambda_runtime = "0.7"
 ...
 ```
 
-**serverless.yml**
+### serverless.yml
 
 The `handler` is set to be the cargo package name.
 
