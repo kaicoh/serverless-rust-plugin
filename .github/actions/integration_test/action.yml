@@ -50,3 +50,6 @@ runs:
 
     - name: Setup QEMU(For use arm64)
       uses: docker/setup-qemu-action@v2
+
+    - name: Install Node Modules
+      run: npm ci

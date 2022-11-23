@@ -53,8 +53,5 @@ jobs:
           cargo-path: tests/integration
           node-cache-path: tests/integration/package-lock.json
 
-      - name: Install Node Modules
-        run: npm ci
-
       - name: Test
         run: npm run test:integration
