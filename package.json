@@ -1,11 +1,11 @@
 {
   "name": "serverless-rust-plugin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Serverless Framework plugin for Rust using Cargo Lambda.",
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "test:integration": "cd tests/integration && ./test.sh",
+    "test:integration": "cd examples && ./testAll.sh",
     "lint": "eslint index.js lib tests"
   },
   "repository": {

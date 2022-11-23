@@ -1,4 +1,4 @@
-service: integration-test
+service: multi-bin-example
 frameworkVersion: '3'
 
 provider:
@@ -10,14 +10,15 @@ provider:
 plugins:
   - serverless-rust-plugin
 
-package:
-  individually: true
-
 custom:
   rust:
     useDocker: false
 
 functions:
-  hello:
-    name: ${self:service}-hello
-    handler: integration-test
+  useFirstName:
+    name: useFirstName
+    handler: multiple-binaries.first
+
+  useLastName:
+    name: useLastName
+    handler: multiple-binaries.last

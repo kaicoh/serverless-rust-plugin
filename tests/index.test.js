@@ -2,17 +2,17 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
-const ServerlessRustPlugin = require('../..');
-const Cargo = require('../../lib/cargo');
-const CargoLambda = require('../../lib/cargolambda');
-const Docker = require('../../lib/docker');
-const request = require('../../lib/request');
+const ServerlessRustPlugin = require('..');
+const Cargo = require('../lib/cargo');
+const CargoLambda = require('../lib/cargolambda');
+const Docker = require('../lib/docker');
+const request = require('../lib/request');
 
 jest.mock('fs');
-jest.mock('../../lib/cargo');
-jest.mock('../../lib/cargolambda');
-jest.mock('../../lib/docker');
-jest.mock('../../lib/request');
+jest.mock('../lib/cargo');
+jest.mock('../lib/cargolambda');
+jest.mock('../lib/docker');
+jest.mock('../lib/request');
 
 describe('ServerlessRustPlugin', () => {
   // An instance of ServerlessRustPlugin
@@ -66,7 +66,7 @@ describe('ServerlessRustPlugin', () => {
 
   describe('constructor', () => {
     // the path index.js is in.
-    const indexPath = path.join(__dirname, '../..');
+    const indexPath = path.join(__dirname, '..');
     const events = [
       'before:package:createDeploymentArtifacts',
       'before:deploy:function:packageFunction',
@@ -87,7 +87,7 @@ describe('ServerlessRustPlugin', () => {
     it('sets project root directory to "srcPath" if serverless.config.servicePath is undefined', () => {
       serverless.config.servicePath = undefined;
       plugin = new ServerlessRustPlugin(serverless, options, utils);
-      const expected = path.join(__dirname, '../..');
+      const expected = path.join(__dirname, '..');
       expect(plugin.srcPath).toEqual(expected);
     });
 
@@ -127,6 +127,9 @@ describe('ServerlessRustPlugin', () => {
           ['function', { shortcut: 'f', type: 'string', required: true }],
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
+          ['env', { shortcut: 'e', type: 'multiple' }],
+          ['port', { type: 'string', default: '9000' }],
+          ['network', { type: 'string' }],
           ['stdout', { type: 'boolean' }],
         ];
 
@@ -559,7 +562,12 @@ describe('ServerlessRustPlugin', () => {
     beforeEach(() => {
       const bin = 'hello';
 
-      options = { function: 'hello' };
+      options = {
+        function: 'hello',
+        port: '9000',
+        network: 'docker-network',
+      };
+
       serverless.service.getFunction = jest.fn(() => ({ handler: bin }));
       CargoLambda.format.binary = 'binary format';
 
@@ -570,6 +578,7 @@ describe('ServerlessRustPlugin', () => {
       Docker.mockImplementation(() => {
         docker = {
           run: jest.fn(() => ({ status: 0 })),
+          runCommand: jest.fn(),
         };
 
         return docker;
@@ -619,6 +628,7 @@ describe('ServerlessRustPlugin', () => {
     it('throws an error when docker run returns NaN status', () => {
       Docker.mockImplementationOnce(() => ({
         run: jest.fn(() => ({})),
+        runCommand: jest.fn(),
       }));
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
     });
@@ -626,8 +636,90 @@ describe('ServerlessRustPlugin', () => {
     it('throws an error when docker run returns error status', () => {
       Docker.mockImplementationOnce(() => ({
         run: jest.fn(() => ({ status: 1 })),
+        runCommand: jest.fn(),
       }));
       expect(() => plugin.buildAndStartDocker()).toThrow(/docker run error/);
+    });
+
+    describe('calls Docker constructor with options object', () => {
+      it('has "name" property', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          name: 'sls-rust-plugin',
+        }));
+      });
+
+      it('has "arch" property from buildOptions.arch', () => {
+        plugin.buildOptions = jest.fn(() => ({ arch: 'some arch' }));
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          arch: 'some arch',
+        }));
+      });
+
+      it('has "bin" and "binDir" properties from artifact', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          bin: 'bin',
+          binDir: 'build/artifacts',
+        }));
+      });
+
+      it('has "network" property from options object', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          network: 'docker-network',
+        }));
+      });
+
+      it('has an empty array "env" property if serverless.options.env is undefined', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          env: [],
+        }));
+      });
+
+      it('has "env" property from serverless.options', () => {
+        options.env = ['foo=bar'];
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          env: ['foo=bar'],
+        }));
+      });
+
+      it('has "port" property from serverless.options', () => {
+        options.port = '8080';
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          port: 8080,
+        }));
+      });
+
+      it('thows an error if port option is not a number', () => {
+        options.port = 'not a number';
+        plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+        plugin.buildOptions = jest.fn(() => buildOptions);
+        plugin.cargoLambdaBuild = jest.fn(() => ({
+          getAll: () => artifacts,
+        }));
+
+        expect(() => plugin.buildAndStartDocker()).toThrow(/port must be an integer/);
+      });
     });
   });
 
@@ -706,6 +798,10 @@ describe('ServerlessRustPlugin', () => {
   });
 
   describe('method: invokeOptions', () => {
+    beforeEach(() => {
+      plugin.options.port = '9000';
+    });
+
     describe('has "stdout" property', () => {
       it('is set from options.stdout', () => {
         plugin.options.stdout = true;
@@ -792,6 +888,23 @@ describe('ServerlessRustPlugin', () => {
             },
           }));
         });
+      });
+    });
+
+    describe('has "port" property', () => {
+      beforeEach(() => {
+        plugin.options.port = '8080';
+      });
+
+      it('is from options.port', () => {
+        expect(plugin.invokeOptions()).toEqual(expect.objectContaining({
+          port: 8080,
+        }));
+      });
+
+      it('throws an error if port options is not a number', () => {
+        plugin.options.port = 'not a number';
+        expect(() => plugin.invokeOptions()).toThrow(/port must be an integer/);
       });
     });
   });

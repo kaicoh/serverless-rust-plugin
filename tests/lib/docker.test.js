@@ -1,5 +1,5 @@
-const Docker = require('../../../lib/docker');
-const CargoLambda = require('../../../lib/cargolambda');
+const Docker = require('../../lib/docker');
+const CargoLambda = require('../../lib/cargolambda');
 
 describe('Docker', () => {
   let dockerArm;
@@ -11,6 +11,7 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.arm64,
       binDir: 'build/arm64',
       bin: 'binArm64',
+      env: [],
       port: 9090,
     });
 
@@ -19,6 +20,7 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.x86_64,
       binDir: 'build/x86_64',
       bin: 'binX86_64',
+      env: [],
       port: 9999,
     });
   });
@@ -93,6 +95,53 @@ describe('Docker', () => {
       ];
       expect(dockerX86._args()).toEqual(expected);
     });
+
+    describe('when given env option', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        env: [],
+        port: 9090,
+      };
+
+      it('sets env args', () => {
+        const docker = new Docker({ ...options, env: ['foo=bar'] });
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--env',
+          'foo=bar',
+        ]));
+      });
+
+      it('escapes space if the value includes any spaces', () => {
+        const docker = new Docker({ ...options, env: ['foo=bar baz'] });
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--env',
+          'foo=bar\ baz', // eslint-disable-line no-useless-escape
+        ]));
+      });
+    });
+
+    describe('when given network option', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        env: [],
+        network: 'serverless-rust-plugin',
+        port: 9090,
+      };
+
+      it('sets network args', () => {
+        const docker = new Docker(options);
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--network',
+          'serverless-rust-plugin',
+        ]));
+      });
+    });
   });
 
   describe('method: run', () => {
@@ -116,6 +165,13 @@ describe('Docker', () => {
         stdio: [process.stdin, 'pipe', process.stderr],
         encoding: 'utf-8',
       });
+    });
+  });
+
+  describe('method: runCommand', () => {
+    it('shows a docker run command with given options', () => {
+      dockerArm._args = jest.fn(() => ['foo', 'bar']);
+      expect(dockerArm.runCommand()).toEqual('docker run foo bar');
     });
   });
 

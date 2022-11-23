@@ -57,9 +57,9 @@ custom:
     useDocker: false
 ```
 
-## Sample settings
+## Example projects
 
-See [this wiki page](https://github.com/kaicoh/serverless-rust-plugin/wiki/Sample).
+See [examples](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples).
 
 ## Usage
 
@@ -72,6 +72,7 @@ $ serverless invoke local -f hello -d '{"firstName":"Mary"}'
 ```
 
 For more info about local invocation see [this doc](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local).
+
 Or if your local machine installs docker, you can invoke your lambda by the following regardless of the architecture.
 
 ```
@@ -80,25 +81,20 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 
 #### rust:invoke:local command options
 
-| option | shortcut | type | required | description |
-| :--- | :---: | :--- | :---: | :--- |
-| function | f | string | ✅ | The name of the function in your service that you want to invoke locally. Required. |
-| path | p | string |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
-| data | d | string |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
-| stdout |  | boolean |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
+| option | shortcut | type | required | default| description |
+| :--- | :---: | :--- | :---: | :---: | :--- |
+| function | f | string | ✅ |  | The name of the function in your service that you want to invoke locally. Required. |
+| path | p | string |  |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
+| data | d | string |  |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
+| env | e | string[] |  |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
+| port |  | number |  | 9000 | The port number docker container exposes to accept request. |
+| network |  | string |  |  | The name of docker network lambda function container is in. |
+| stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
-#### examples
-
-##### input from JSON file
 
 ```
 $ serverless rust:invoke:local -f hello -p event.json
 {"message":"Hello, Mary!"}
 ```
 
-##### pipe outputs to other command
-
-```
-$ serverless rust:invoke:local -f hello -p event.json --stdout 2>/dev/null | jq .message
-"Hello, Mary!"
-```
+Need more examples? See [simple example](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).

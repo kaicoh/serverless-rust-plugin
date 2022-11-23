@@ -1,0 +1,20 @@
+service: simple-example
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2
+  memorySize: 128
+  architecture: arm64
+
+plugins:
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    useDocker: false
+
+functions:
+  hello:
+    name: hello
+    handler: simple

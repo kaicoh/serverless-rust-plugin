@@ -1,5 +1,5 @@
 [package]
-name = "integration-test"
+name = "simple"
 version = "0.1.0"
 authors = ["kaicoh <sumireminami@gmail.com>"]
 edition = "2021"

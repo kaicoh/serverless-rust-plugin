@@ -73,8 +73,22 @@ class ServerlessRustPlugin {
             shortcut: 'd',
             type: 'string',
           },
+          env: {
+            usage: 'String representing an environment variable to set when invoking your function, in the form <name>=<value>. Can be repeated for more than one environment variable.',
+            shortcut: 'e',
+            type: 'multiple',
+          },
+          port: {
+            usage: 'The port number docker container exposes to accept request.',
+            type: 'string',
+            default: '9000',
+          },
+          network: {
+            usage: 'The name of docker network lambda function container is in.',
+            type: 'string',
+          },
           stdout: {
-            usage: 'Outputs to stdout. default is stderr',
+            usage: 'The lambda function outputs to stdout. default is stderr',
             type: 'boolean',
           },
         },
@@ -254,14 +268,23 @@ class ServerlessRustPlugin {
     }
   }
 
-  invokeOptions() {
-    this.log.info(this.options);
+  dockerPort() {
+    const port = parseInt(this.options.port, 10);
 
+    if (Number.isNaN(port)) {
+      throw this.error(`port must be an integer: ${this.options.port}`);
+    }
+
+    return port;
+  }
+
+  invokeOptions() {
     return {
-      port: 9000,
+      port: this.dockerPort(),
       retryCount: 3,
       retryInterval: 1000,
       stdout: this.options.stdout || false,
+      env: this.options.env || [],
       data: {
         ...this.readJsonFile(),
         ...this.strToJSON(this.options.data || '{}'),
@@ -301,11 +324,13 @@ class ServerlessRustPlugin {
       name: containerName,
       arch: options.arch,
       bin: path.basename(artifact.path),
+      env: this.options.env || [],
       binDir: path.dirname(artifact.path),
-      port: 9000, // port will be an option.
+      port: this.dockerPort(),
+      network: this.options.network,
     });
 
-    this.log.info('Docker run');
+    this.log.info(`Docker run: ${this.docker.runCommand()}`);
 
     const result = this.docker.run(spawnSync);
 
@@ -346,6 +371,8 @@ class ServerlessRustPlugin {
 
   // just a wrapper function needs to stop docker container
   beforeInvokeLocal() {
+    this.log.info(this.options);
+
     try {
       this.buildAndStartDocker();
     } catch (err) {
