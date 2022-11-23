@@ -6,8 +6,7 @@ For single binary.
 
 ### Cargo.toml
 
-No [[bin]] section.
-
+There are no `[[bin]]` sections.
 
 ```
 [package]
