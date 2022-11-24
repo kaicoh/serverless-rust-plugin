@@ -65,6 +65,13 @@ $ npx serverless rust:invoke:local -f hello -p event.json -e GREETING="Good even
 {"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
 ```
 
+### "env-file" option
+
+```
+$ npx serverless rust:invoke:local -f hello -p event.json --env-file .env
+{"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
+```
+
 ### pipe outputs to other command
 
 ```
