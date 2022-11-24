@@ -1,4 +1,4 @@
-service: multi-bin-example
+service: multi-bin
 frameworkVersion: '3'
 
 provider:
@@ -17,8 +17,8 @@ custom:
 functions:
   useFirstName:
     name: useFirstName
-    handler: multiple-binaries.first
+    handler: multi-binary.first
 
   useLastName:
     name: useLastName
-    handler: multiple-binaries.last
+    handler: multi-binary.last

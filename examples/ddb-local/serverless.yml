@@ -1,4 +1,4 @@
-service: ddb-docker-compose
+service: ddb
 frameworkVersion: '3'
 
 provider:
@@ -17,4 +17,4 @@ custom:
 functions:
   query:
     name: querySongs
-    handler: ddb-docker-compose
+    handler: ddb-local
