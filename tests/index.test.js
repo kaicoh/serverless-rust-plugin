@@ -129,7 +129,7 @@ describe('ServerlessRustPlugin', () => {
           ['data', { shortcut: 'd', type: 'string' }],
           ['env', { shortcut: 'e', type: 'multiple' }],
           ['port', { type: 'string', default: '9000' }],
-          ['network', { type: 'string' }],
+          ['docker-args', { type: 'string' }],
           ['stdout', { type: 'boolean' }],
         ];
 
@@ -565,7 +565,7 @@ describe('ServerlessRustPlugin', () => {
       options = {
         function: 'hello',
         port: '9000',
-        network: 'docker-network',
+        'docker-args': 'foo bar baz',
       };
 
       serverless.service.getFunction = jest.fn(() => ({ handler: bin }));
@@ -665,10 +665,10 @@ describe('ServerlessRustPlugin', () => {
         }));
       });
 
-      it('has "network" property from options object', () => {
+      it('has "additional-args" property from options object\'s docker-args property', () => {
         plugin.buildAndStartDocker();
         expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
-          network: 'docker-network',
+          'additional-args': 'foo bar baz',
         }));
       });
 

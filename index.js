@@ -83,8 +83,8 @@ class ServerlessRustPlugin {
             type: 'string',
             default: '9000',
           },
-          network: {
-            usage: 'The name of docker network lambda function container is in.',
+          'docker-args': {
+            usage: 'Additional arguments passed to `docker run` command for lambda function container.',
             type: 'string',
           },
           stdout: {
@@ -327,7 +327,7 @@ class ServerlessRustPlugin {
       env: this.options.env || [],
       binDir: path.dirname(artifact.path),
       port: this.dockerPort(),
-      network: this.options.network,
+      'additional-args': this.options['docker-args'],
     });
 
     this.log.info(`Docker run: ${this.docker.runCommand()}`);
