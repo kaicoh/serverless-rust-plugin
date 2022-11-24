@@ -12,7 +12,7 @@ Get docker network name the dynamodb-local container runs on. In this example th
 version: '3'
 
 services:
-  # The service name `ddb` is used as the hostname used from the container running on the same docker network.
+  # The service name `ddb` is used as the hostname from the container running on the same docker network.
   # In this case, lambda function container have to call dynamodb api to `ddb` host.
   ddb:
     image: amazon/dynamodb-local:latest
