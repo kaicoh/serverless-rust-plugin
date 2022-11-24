@@ -43,7 +43,10 @@ jobs:
   integration-test:
     strategy:
       matrix:
-        project: [simple, multiple-binaries]
+        project:
+          - simple
+          - multiple-binaries
+          - ddb-docker-compose
 
     runs-on: ubuntu-latest
 
