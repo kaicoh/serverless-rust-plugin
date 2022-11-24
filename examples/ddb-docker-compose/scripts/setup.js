@@ -27,7 +27,7 @@ function healthCheck(retry) {
     .send(command)
     .catch((err) => {
       if (retry > 0) {
-        console.log('health check fails. retry after 1 second.');
+        console.log('health check failed. retry after 1 second.');
         return sleep(1).then(() => healthCheck(retry - 1));
       }
 

@@ -32,7 +32,7 @@ do
     if [ $RETRY -ge 0 ]
     then
         echo -e "dynamodb-local is unavailable -- sleeping"
-        sleep 3
+        sleep 1
 
         ((--RETRY))
     else
@@ -48,8 +48,6 @@ npm run ddb:setup
 #  Local invocation test
 ####################################
 echo "Test rust:invoke:local command"
-
-rustup target add aarch64-unknown-linux-gnu
 
 npx serverless rust:invoke:local \
     -f query \
