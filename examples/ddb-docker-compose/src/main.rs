@@ -1,7 +1,7 @@
-use aws_sdk_dynamodb::{Client, Endpoint};
 use aws_sdk_dynamodb::model::{AttributeValue, Select};
+use aws_sdk_dynamodb::{Client, Endpoint};
 use http::Uri;
-use lambda_runtime::{service_fn, LambdaEvent, Error};
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -33,7 +33,13 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
         .select(Select::AllAttributes)
         .send()
         .await
-        .map(|res| res.items().unwrap_or_default().iter().map(Song::from).collect())
+        .map(|res| {
+            res.items()
+                .unwrap_or_default()
+                .iter()
+                .map(Song::from)
+                .collect()
+        })
         .unwrap_or_default();
 
     let json_songs = serde_json::to_value(songs)?;
