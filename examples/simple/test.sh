@@ -85,6 +85,24 @@ then
     show_outputs output.json stderr.log
 fi
 
+# Test --env-file option
+npx serverless rust:invoke:local \
+    -f hello \
+    -p event.json \
+    --env-file .env \
+    --port 8008 \
+    --stdout \
+    1>output.json \
+    2>stderr.log
+
+assert_success "when invoked locally with --env-file option, it produces expected output" \
+    diff output.json expects/envOption.json
+
+if [ $STATUS -ne 0 ]
+then
+    show_outputs output.json stderr.log
+fi
+
 if [ "$RUN_ALL" != "true" ]
 then
     end_tests

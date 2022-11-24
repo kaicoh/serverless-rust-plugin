@@ -128,6 +128,7 @@ describe('ServerlessRustPlugin', () => {
           ['path', { shortcut: 'p', type: 'string' }],
           ['data', { shortcut: 'd', type: 'string' }],
           ['env', { shortcut: 'e', type: 'multiple' }],
+          ['env-file', { type: 'string' }],
           ['port', { type: 'string', default: '9000' }],
           ['docker-args', { type: 'string' }],
           ['stdout', { type: 'boolean' }],
@@ -565,6 +566,7 @@ describe('ServerlessRustPlugin', () => {
       options = {
         function: 'hello',
         port: '9000',
+        'env-file': 'some/path',
         'docker-args': 'foo bar baz',
       };
 
@@ -665,10 +667,17 @@ describe('ServerlessRustPlugin', () => {
         }));
       });
 
-      it('has "additional-args" property from options object\'s docker-args property', () => {
+      it('has "envFile" property from options object\'s env-file property', () => {
         plugin.buildAndStartDocker();
         expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
-          'additional-args': 'foo bar baz',
+          envFile: 'some/path',
+        }));
+      });
+
+      it('has "addArgs" property from options object\'s docker-args property', () => {
+        plugin.buildAndStartDocker();
+        expect(Docker).toHaveBeenCalledWith(expect.objectContaining({
+          addArgs: 'foo bar baz',
         }));
       });
 
