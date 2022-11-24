@@ -88,7 +88,7 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 | data | d | string |  |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
 | env | e | string |  |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
 | port |  | number |  | 9000 | The port number docker container exposes to accept request. |
-| network |  | string |  |  | The name of docker network lambda function container runs on. |
+| docker-args |  | string |  |  | Additional arguments passed to `docker run` command for lambda function container. |
 | stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
 

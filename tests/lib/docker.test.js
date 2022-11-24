@@ -123,22 +123,23 @@ describe('Docker', () => {
       });
     });
 
-    describe('when given network option', () => {
+    describe('when given additional-args option', () => {
       const options = {
         name: 'Docker arm64',
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
         env: [],
-        network: 'serverless-rust-plugin',
         port: 9090,
+        'additional-args': 'foo bar baz',
       };
 
-      it('sets network args', () => {
+      it('sets additional args', () => {
         const docker = new Docker(options);
         expect(docker._args()).toEqual(expect.arrayContaining([
-          '--network',
-          'serverless-rust-plugin',
+          'foo',
+          'bar',
+          'baz',
         ]));
       });
     });
