@@ -78,6 +78,10 @@ class ServerlessRustPlugin {
             shortcut: 'e',
             type: 'multiple',
           },
+          'env-file': {
+            usage: 'The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service.',
+            type: 'string',
+          },
           port: {
             usage: 'The port number docker container exposes to accept request.',
             type: 'string',
@@ -325,9 +329,10 @@ class ServerlessRustPlugin {
       arch: options.arch,
       bin: path.basename(artifact.path),
       env: this.options.env || [],
+      envFile: this.options['env-file'],
       binDir: path.dirname(artifact.path),
       port: this.dockerPort(),
-      'additional-args': this.options['docker-args'],
+      addArgs: this.options['docker-args'],
     });
 
     this.log.info(`Docker run: ${this.docker.runCommand()}`);

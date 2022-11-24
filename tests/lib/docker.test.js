@@ -123,7 +123,7 @@ describe('Docker', () => {
       });
     });
 
-    describe('when given additional-args option', () => {
+    describe('when given envFile option', () => {
       const options = {
         name: 'Docker arm64',
         arch: CargoLambda.architecture.arm64,
@@ -131,7 +131,27 @@ describe('Docker', () => {
         bin: 'binArm64',
         env: [],
         port: 9090,
-        'additional-args': 'foo bar baz',
+        envFile: 'some/path',
+      };
+
+      it('sets env-file args', () => {
+        const docker = new Docker(options);
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          '--env-file',
+          'some/path',
+        ]));
+      });
+    });
+
+    describe('when given addArgs option', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        env: [],
+        port: 9090,
+        addArgs: 'foo bar baz',
       };
 
       it('sets additional args', () => {
