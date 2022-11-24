@@ -79,7 +79,7 @@ $ npm run ddb:setup
 
 ## Test
 
-When invoked, you have to pass network argument as --docker-args option. And this example also passes aws credentials from .env file.
+When invoking, you have to pass network argument as --docker-args option. And this example also passes aws credentials from .env file.
 
 ```
 $ npx serverless rust:invoke:local -f query -p event.json --env-file .env --docker-args "--network sls-rust-network" --stdout 2>/dev/null | jq .
