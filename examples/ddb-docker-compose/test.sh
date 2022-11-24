@@ -42,12 +42,14 @@ do
 done
 
 echo "setup dynamodb table"
-npm run ddb:setup 1>/dev/null 2>&1
+npm run ddb:setup
 
 ####################################
 #  Local invocation test
 ####################################
 echo "Test rust:invoke:local command"
+
+rustup target add aarch64-unknown-linux-gnu
 
 npx serverless rust:invoke:local \
     -f query \
