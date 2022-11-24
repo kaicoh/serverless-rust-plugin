@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "ddb:setup": "node scripts/setup.js"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-dynamodb": "^3.216.0",
+    "serverless": "^3.24.1",
+    "serverless-rust-plugin": "file:../.."
+  }
+}

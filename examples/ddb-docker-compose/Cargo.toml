@@ -1,0 +1,16 @@
+[package]
+name = "ddb-docker-compose"
+version = "0.1.0"
+authors = ["kaicoh <sumireminami@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = "0.51.0"
+aws-sdk-dynamodb = "0.21.0"
+http = "0.2"
+lambda_runtime = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros"] }

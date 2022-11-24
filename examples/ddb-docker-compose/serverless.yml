@@ -1,0 +1,20 @@
+service: ddb-docker-compose
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2
+  memorySize: 128
+  architecture: arm64
+
+plugins:
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    useDocker: false
+
+functions:
+  query:
+    name: querySongs
+    handler: ddb-docker-compose
