@@ -1,4 +1,3 @@
-const R = require('ramda');
 const CargoLambda = require('../../lib/cargolambda');
 
 describe('CargoLambda', () => {
@@ -87,7 +86,8 @@ describe('CargoLambda', () => {
         format: 'binary',
       };
       const builder = new CargoLambda(cargo, options);
-      const expecteds = [
+
+      expect(builder._buildArgs()).toEqual(expect.arrayContaining([
         'run',
         '--rm',
         '-t',
@@ -98,10 +98,7 @@ describe('CargoLambda', () => {
         'sample:1.2.3',
         'build',
         '--release',
-      ];
-      R.zip(builder._buildArgs(), expecteds).forEach(([arg, expected]) => {
-        expect(arg).toEqual(expected);
-      });
+      ]));
     });
 
     it('returns cargo command options when useDocker is false', () => {
@@ -112,16 +109,14 @@ describe('CargoLambda', () => {
         format: 'zip',
       };
       const builder = new CargoLambda(cargo, options);
-      const expecteds = [
+
+      expect(builder._buildArgs()).toEqual(expect.arrayContaining([
         'lambda',
         'build',
         '--arm64',
         '--output-format',
         'zip',
-      ];
-      R.zip(builder._buildArgs(), expecteds).forEach(([arg, expected]) => {
-        expect(arg).toEqual(expected);
-      });
+      ]));
     });
   });
 
@@ -263,9 +258,7 @@ describe('CargoLambda', () => {
       output = builder.build(mockSpawn, { foo: 'bar' });
       args = mockSpawn.mock.lastCall;
 
-      R.zip(args[1], ['arg0', 'arg1', 'arg2']).forEach(([arg, expected]) => {
-        expect(arg).toEqual(expected);
-      });
+      expect(args[1]).toEqual(expect.arrayContaining(['arg0', 'arg1', 'arg2']));
     });
 
     it('passes 1st argument of itself to spawn function as 3rd argument', () => {
