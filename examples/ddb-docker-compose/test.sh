@@ -24,8 +24,9 @@ fi
 docker-compose up -d
 
 echo "wait until dynamodb-local is running"
+# We have to specify container name because default nameing rule is defferent from mac and linux. See: https://github.com/docker/for-mac/issues/6035
+CONTAINER_NAME=ddb_local # defined in docker-compose.yml
 RETRY=30
-CONTAINER_NAME=ddb-docker-compose-ddb-1
 until [ "$( docker container inspect -f '{{.State.Running}}' $CONTAINER_NAME )" == "true" ]
 do
     if [ $RETRY -ge 0 ]

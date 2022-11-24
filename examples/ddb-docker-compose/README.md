@@ -16,6 +16,7 @@ services:
   # In this case, lambda function container have to call dynamodb api to `ddb` host.
   ddb:
     image: amazon/dynamodb-local:latest
+    container_name: ddb_local
     ports:
       - 8000:8000
     networks:
