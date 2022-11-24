@@ -1,8 +1,9 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { CreateTableCommand, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { CreateTableCommand, PutItemCommand, ListTablesCommand } = require('@aws-sdk/client-dynamodb');
 const songs = require('./songs.json');
 
 const table = 'Music';
+const SECOND = 1000;
 
 const client = new DynamoDBClient({
   region: 'localhost',
@@ -12,6 +13,27 @@ const client = new DynamoDBClient({
     secretAccessKey: 'somelocalaccesskey',
   },
 });
+
+function sleep(sec) {
+  return new Promise((resolve) => {
+    setTimeout(() => { resolve(); }, sec * SECOND);
+  });
+}
+
+function healthCheck(retry) {
+  const command = new ListTablesCommand({});
+
+  return client
+    .send(command)
+    .catch((err) => {
+      if (retry > 0) {
+        console.log('health check fails. retry after 1 second.');
+        return sleep(1).then(() => healthCheck(retry - 1));
+      }
+
+      throw err;
+    });
+}
 
 function createTable() {
   const command = new CreateTableCommand({
@@ -51,7 +73,8 @@ function seedTable() {
   return Promise.all(commands.map((command) => client.send(command)));
 }
 
-createTable()
+healthCheck(30)
+  .then(createTable)
   .then(console.log)
   .then(seedTable)
   .then(console.log)
