@@ -47,6 +47,7 @@ jobs:
           - simple
           - multi-binary
           - ddb-local
+          - workspace
 
     runs-on: ubuntu-latest
 
