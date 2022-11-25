@@ -30,7 +30,7 @@ networks:
 
 ### main.rs
 
-In rust code, you have to set endpoint to aws config. The hostname of the endpoint needs to match the service name of the dynamodb-local container. In this case `ddb`.
+In rust code, you have to set endpoint to aws config. And the hostname of it needs to match the service name of the dynamodb-local container. In this case `ddb`.
 
 ```
 use aws_sdk_dynamodb::Endpoint;
@@ -53,6 +53,21 @@ async fn create_aws_config() -> aws_config::SdkConfig {
         aws_config::load_from_env().await
     }
 }
+```
+
+### serverless.yml
+
+This example passes `--network sls-rust-network` arguments to the lambda function container to run on the same network with dynamodb-local container.
+And in this case, we also pass environment variables via `.env` file using envFile setting.
+
+```
+custom:
+  rust:
+    local:
+      envFile: .env
+      # Adding this setting, the lambda function container can access services
+      # running on the same docker network.
+      dockerArgs: --network sls-rust-network
 ```
 
 ## Installation
@@ -79,10 +94,8 @@ $ npm run ddb:setup
 
 ## Test
 
-When invoking, you have to pass network argument as --docker-args option. And this example also passes aws credentials from .env file.
-
 ```
-$ npx serverless rust:invoke:local -f query -p event.json --env-file .env --docker-args "--network sls-rust-network" --stdout 2>/dev/null | jq .
+$ npx serverless rust:invoke:local -f query -p event.json --stdout 2>/dev/null | jq .
 [
   {
     "albumTitle": "Songs About Life",

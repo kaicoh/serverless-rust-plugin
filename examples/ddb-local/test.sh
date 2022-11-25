@@ -52,8 +52,6 @@ echo "Test rust:invoke:local command"
 npx serverless rust:invoke:local \
     -f query \
     -p event.json \
-    --env-file .env \
-    --docker-args "--network sls-rust-network" \
     --stdout \
     1>output.json \
     2>stderr.log
