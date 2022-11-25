@@ -11,7 +11,6 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.arm64,
       binDir: 'build/arm64',
       bin: 'binArm64',
-      env: [],
       port: 9090,
     });
 
@@ -20,7 +19,6 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.x86_64,
       binDir: 'build/x86_64',
       bin: 'binX86_64',
-      env: [],
       port: 9999,
     });
   });
@@ -102,7 +100,6 @@ describe('Docker', () => {
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
-        env: [],
         port: 9090,
       };
 
@@ -123,22 +120,41 @@ describe('Docker', () => {
       });
     });
 
-    describe('when given network option', () => {
+    describe('when given envFile option', () => {
       const options = {
         name: 'Docker arm64',
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
-        env: [],
-        network: 'serverless-rust-plugin',
         port: 9090,
+        envFile: 'some/path',
       };
 
-      it('sets network args', () => {
+      it('sets env-file args', () => {
         const docker = new Docker(options);
         expect(docker._args()).toEqual(expect.arrayContaining([
-          '--network',
-          'serverless-rust-plugin',
+          '--env-file',
+          'some/path',
+        ]));
+      });
+    });
+
+    describe('when given addArgs option', () => {
+      const options = {
+        name: 'Docker arm64',
+        arch: CargoLambda.architecture.arm64,
+        binDir: 'build/arm64',
+        bin: 'binArm64',
+        port: 9090,
+        addArgs: 'foo bar baz',
+      };
+
+      it('sets additional args', () => {
+        const docker = new Docker(options);
+        expect(docker._args()).toEqual(expect.arrayContaining([
+          'foo',
+          'bar',
+          'baz',
         ]));
       });
     });

@@ -43,7 +43,10 @@ jobs:
   integration-test:
     strategy:
       matrix:
-        project: [simple, multiple-binaries]
+        project:
+          - simple
+          - multi-binary
+          - ddb-local
 
     runs-on: ubuntu-latest
 

@@ -1,4 +1,4 @@
-service: simple-example
+service: ddb
 frameworkVersion: '3'
 
 provider:
@@ -14,8 +14,11 @@ custom:
   rust:
     cargoLambda:
       docker: false
+    local:
+      envFile: .env
+      dockerArgs: --network sls-rust-network
 
 functions:
-  hello:
-    name: hello
-    handler: simple
+  query:
+    name: querySongs
+    handler: ddb-local

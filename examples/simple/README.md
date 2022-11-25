@@ -41,7 +41,7 @@ functions:
 $ npm install
 ```
 
-## Local invocation
+## Local invocation examples
 
 ### "data" option
 
@@ -62,6 +62,13 @@ $ npx serverless rust:invoke:local -f hello -p event.json
 
 ```
 $ npx serverless rust:invoke:local -f hello -p event.json -e GREETING="Good evening" -e STATUS=Fine
+{"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
+```
+
+### "env-file" option
+
+```
+$ npx serverless rust:invoke:local -f hello -p event.json --env-file .env
 {"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
 ```
 

@@ -54,7 +54,8 @@ If your local machine installs cargo-lambda you can use it by the following.
 ```
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
 ```
 
 ## Example projects
@@ -86,15 +87,25 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 | function | f | string | ✅ |  | The name of the function in your service that you want to invoke locally. Required. |
 | path | p | string |  |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
 | data | d | string |  |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
-| env | e | string[] |  |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
+| env | e | string |  |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
+| env-file |  | string |  |  | The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service. |
 | port |  | number |  | 9000 | The port number docker container exposes to accept request. |
-| network |  | string |  |  | The name of docker network lambda function container is in. |
+| docker-args |  | string |  |  | Additional arguments passed to `docker run` command for lambda function container. |
 | stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
+Need more examples? See [examples/simple](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).
+
+#### serverless.yml settings for rust:invoke:local command
+
+Using setup in serverless.yml, you can omit some rust:invoke:local options. For now `port`, `envFile` and `dockerArgs` are available.
 
 ```
-$ serverless rust:invoke:local -f hello -p event.json
-{"message":"Hello, Mary!"}
+custom:
+  rust:
+    local:
+      port: 9000
+      # equivalent to --env-file option
+      envFile: .env
+      # equivalent to --docker-args option
+      dockerArgs: "--add-host host.docker.internal:host-gateway --network my-docker-network"
 ```
-
-Need more examples? See [simple example](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).
