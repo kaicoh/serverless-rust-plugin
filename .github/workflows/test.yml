@@ -45,8 +45,8 @@ jobs:
       matrix:
         project:
           - simple
-          - multiple-binaries
-          - ddb-docker-compose
+          - multi-binary
+          - ddb-local
 
     runs-on: ubuntu-latest
 

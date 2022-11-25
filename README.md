@@ -54,7 +54,8 @@ If your local machine installs cargo-lambda you can use it by the following.
 ```
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
 ```
 
 ## Example projects
@@ -92,10 +93,19 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 | docker-args |  | string |  |  | Additional arguments passed to `docker run` command for lambda function container. |
 | stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
 
+Need more examples? See [examples/simple](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).
+
+#### serverless.yml settings for rust:invoke:local command
+
+Using setup in serverless.yml, you can omit some rust:invoke:local options. For now `port`, `envFile` and `dockerArgs` are available.
 
 ```
-$ serverless rust:invoke:local -f hello -p event.json
-{"message":"Hello, Mary!"}
+custom:
+  rust:
+    local:
+      port: 9000
+      # equivalent to --env-file option
+      envFile: .env
+      # equivalent to --docker-args option
+      dockerArgs: "--add-host host.docker.internal:host-gateway --network my-docker-network"
 ```
-
-Need more examples? See [simple example](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).

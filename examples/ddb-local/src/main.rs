@@ -47,7 +47,7 @@ async fn func(event: LambdaEvent<Value>) -> Result<Value, Error> {
     Ok(json_songs)
 }
 
-// If env `ENV` is set to be local, use config for local setting
+// If env `ENV` is set to be local, use config for local invocation.
 async fn create_aws_config() -> aws_config::SdkConfig {
     let env = std::env::var("ENV").unwrap_or_else(|_| "dev".to_string());
 
@@ -55,7 +55,7 @@ async fn create_aws_config() -> aws_config::SdkConfig {
         // For `local` use
         aws_config::from_env()
             // NOTE:
-            // `hostname` should equals to service name of docker-compose.
+            // `hostname` should be equal to service name in docker-compose.
             .endpoint_resolver(Endpoint::immutable(Uri::from_static("http://ddb:8000")))
             .load()
             .await

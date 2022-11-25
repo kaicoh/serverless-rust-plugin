@@ -1,5 +1,5 @@
 [package]
-name = "ddb-docker-compose"
+name = "ddb-local"
 version = "0.1.0"
 authors = ["kaicoh <sumireminami@gmail.com>"]
 edition = "2021"

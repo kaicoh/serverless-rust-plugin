@@ -1,4 +1,4 @@
-service: multi-bin-example
+service: multi-bin
 frameworkVersion: '3'
 
 provider:
@@ -12,13 +12,14 @@ plugins:
 
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
 
 functions:
   useFirstName:
     name: useFirstName
-    handler: multiple-binaries.first
+    handler: multi-binary.first
 
   useLastName:
     name: useLastName
-    handler: multiple-binaries.last
+    handler: multi-binary.last

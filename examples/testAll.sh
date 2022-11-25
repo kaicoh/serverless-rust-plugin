@@ -9,7 +9,7 @@ source ./commands.sh
 
 start_tests
 
-for project in simple multiple-binaries ddb-docker-compose
+for project in simple multi-binary ddb-local
 do
     cd "${HERE}"/"${project}"
     echo

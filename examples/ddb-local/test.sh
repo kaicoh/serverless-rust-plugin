@@ -24,7 +24,7 @@ fi
 docker-compose up -d
 
 echo "wait until dynamodb-local is running"
-# We have to specify container name because default nameing rule is defferent from mac and linux. See: https://github.com/docker/for-mac/issues/6035
+# We have to specify container name because default naming rule is defferent from mac and linux. See: https://github.com/docker/for-mac/issues/6035
 CONTAINER_NAME=ddb_local # defined in docker-compose.yml
 RETRY=30
 until [ "$( docker container inspect -f '{{.State.Running}}' $CONTAINER_NAME )" == "true" ]
@@ -52,8 +52,6 @@ echo "Test rust:invoke:local command"
 npx serverless rust:invoke:local \
     -f query \
     -p event.json \
-    --env-file .env \
-    --docker-args "--network sls-rust-network" \
     --stdout \
     1>output.json \
     2>stderr.log

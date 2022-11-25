@@ -1,4 +1,4 @@
-service: ddb-docker-compose
+service: ddb
 frameworkVersion: '3'
 
 provider:
@@ -12,9 +12,13 @@ plugins:
 
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
+    local:
+      envFile: .env
+      dockerArgs: --network sls-rust-network
 
 functions:
   query:
     name: querySongs
-    handler: ddb-docker-compose
+    handler: ddb-local

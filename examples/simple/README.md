@@ -41,7 +41,7 @@ functions:
 $ npm install
 ```
 
-## Local invocation
+## Local invocation examples
 
 ### "data" option
 

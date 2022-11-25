@@ -274,7 +274,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "multiple-binaries"
+name = "multi-binary"
 version = "0.1.0"
 dependencies = [
  "lambda_runtime",
