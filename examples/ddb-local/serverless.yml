@@ -12,7 +12,8 @@ plugins:
 
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
 
 functions:
   query:

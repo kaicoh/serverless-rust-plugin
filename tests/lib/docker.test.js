@@ -11,7 +11,6 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.arm64,
       binDir: 'build/arm64',
       bin: 'binArm64',
-      env: [],
       port: 9090,
     });
 
@@ -20,7 +19,6 @@ describe('Docker', () => {
       arch: CargoLambda.architecture.x86_64,
       binDir: 'build/x86_64',
       bin: 'binX86_64',
-      env: [],
       port: 9999,
     });
   });
@@ -102,7 +100,6 @@ describe('Docker', () => {
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
-        env: [],
         port: 9090,
       };
 
@@ -129,7 +126,6 @@ describe('Docker', () => {
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
-        env: [],
         port: 9090,
         envFile: 'some/path',
       };
@@ -149,7 +145,6 @@ describe('Docker', () => {
         arch: CargoLambda.architecture.arm64,
         binDir: 'build/arm64',
         bin: 'binArm64',
-        env: [],
         port: 9090,
         addArgs: 'foo bar baz',
       };

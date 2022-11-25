@@ -54,7 +54,8 @@ If your local machine installs cargo-lambda you can use it by the following.
 ```
 custom:
   rust:
-    useDocker: false
+    cargoLambda:
+      docker: false
 ```
 
 ## Example projects

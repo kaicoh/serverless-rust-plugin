@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
+const _get = require('lodash.get');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Docker = require('./lib/docker');
@@ -43,14 +44,9 @@ class ServerlessRustPlugin {
     this.serverless = serverless;
     this.options = options;
     this.log = log;
-    this.servicePath = this.serverless.config.servicePath || '';
-    this.srcPath = path.resolve(this.servicePath);
-    this.custom = {
-      cargoPath: path.join(this.srcPath, 'Cargo.toml'),
-      useDocker: true,
-      ...((this.serverless.service.custom && this.serverless.service.custom.rust) || {}),
-    };
-    this.cargo = new Cargo(this.custom.cargoPath);
+    this.srcPath = path.resolve(this.serverless.config.servicePath || '');
+    this.custom = (this.serverless.service.custom && this.serverless.service.custom.rust) || {};
+    this.cargo = new Cargo(path.join(this.srcPath, 'Cargo.toml'));
 
     this.commands = {
       'rust:invoke:local': {
@@ -85,7 +81,6 @@ class ServerlessRustPlugin {
           port: {
             usage: 'The port number docker container exposes to accept request.',
             type: 'string',
-            default: '9000',
           },
           'docker-args': {
             usage: 'Additional arguments passed to `docker run` command for lambda function container.',
@@ -100,11 +95,31 @@ class ServerlessRustPlugin {
     };
 
     this.hooks = {
-      'before:package:createDeploymentArtifacts': this.buildZip.bind(this),
-      'before:deploy:function:packageFunction': this.buildZip.bind(this),
+      'before:package:createDeploymentArtifacts': this.package.bind(this),
+      'before:deploy:function:packageFunction': this.package.bind(this),
       'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
       'rust:invoke:local:invoke': this.invokeLocal.bind(this),
       'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
+    };
+  }
+
+  // `Static` settings from serverless.yml. This is distinguished from `Dynamic` options.
+  get settings() {
+    return {
+      srcPath: this.srcPath,
+
+      cargoLambda: {
+        docker: _get(this.custom, ['cargoLambda', 'docker'], true),
+        dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
+        profile: _get(this.custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
+        arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
+      },
+
+      local: {
+        port: _get(this.custom, ['local', 'port']),
+        envFile: _get(this.custom, ['local', 'envFile']),
+        dockerArgs: _get(this.custom, ['local', 'dockerArgs']),
+      },
     };
   }
 
@@ -112,15 +127,38 @@ class ServerlessRustPlugin {
     return path.join(this.srcPath, 'target/lambda', profile);
   }
 
-  buildOptions(options = {}) {
+  cargoLambdaOptions({ format }) {
     return {
-      useDocker: this.custom.useDocker,
-      srcPath: this.srcPath,
-      dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
-      profile: this.custom.cargoProfile || CargoLambda.profile.release,
-      arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
-      format: CargoLambda.format.zip,
-      ...options,
+      format,
+      srcPath: this.settings.srcPath,
+      ...this.settings.cargoLambda,
+    };
+  }
+
+  invokeOptions() {
+    return {
+      port: this.dockerPort(),
+      retryCount: 3,
+      retryInterval: 1000,
+      stdout: this.options.stdout || false,
+      env: this.options.env || [],
+      data: {
+        ...this.readJsonFile(),
+        ...this.strToJSON(this.options.data || '{}'),
+      },
+    };
+  }
+
+  dockerOptions({ artifactPath }) {
+    return {
+      name: 'sls-rust-plugin',
+      port: this.dockerPort(),
+      arch: this.settings.cargoLambda.arch,
+      bin: path.basename(artifactPath),
+      binDir: path.dirname(artifactPath),
+      env: this.options.env,
+      envFile: this.options['env-file'] || this.settings.local.envFile,
+      addArgs: this.options['docker-args'] || this.settings.local.dockerArgs,
     };
   }
 
@@ -188,7 +226,7 @@ class ServerlessRustPlugin {
     });
   }
 
-  cargoLambdaBuild(options) {
+  build(options) {
     if (this.serverless.service.provider.name !== 'aws') {
       throw this.error('Provider must be "aws" to use this plugin');
     }
@@ -224,8 +262,9 @@ class ServerlessRustPlugin {
     return artifacts;
   }
 
-  run(options) {
-    const artifacts = this.cargoLambdaBuild(options);
+  package() {
+    const options = this.cargoLambdaOptions({ format: CargoLambda.format.zip });
+    const artifacts = this.build(options);
 
     const targetDir = this.deployArtifactDir(options.profile);
     mkdirSyncIfNotExist(targetDir);
@@ -233,16 +272,6 @@ class ServerlessRustPlugin {
     this.modifyFunctions({ artifacts, options });
 
     this.log.success('Complete building rust functions');
-  }
-
-  buildZip() {
-    const options = this.buildOptions({ format: CargoLambda.format.zip });
-    this.run(options);
-  }
-
-  buildBinary() {
-    const options = this.buildOptions({ format: CargoLambda.format.binary });
-    this.run(options);
   }
 
   error(message) {
@@ -273,34 +302,22 @@ class ServerlessRustPlugin {
   }
 
   dockerPort() {
-    const port = parseInt(this.options.port, 10);
+    // options.port is used when both custom.local.port and options.port are set.
+    const strPort = this.options.port || this.settings.local.port || '9000';
+    const port = parseInt(strPort, 10);
 
     if (Number.isNaN(port)) {
-      throw this.error(`port must be an integer: ${this.options.port}`);
+      throw this.error(`port must be an integer: ${strPort}`);
     }
 
     return port;
   }
 
-  invokeOptions() {
-    return {
-      port: this.dockerPort(),
-      retryCount: 3,
-      retryInterval: 1000,
-      stdout: this.options.stdout || false,
-      env: this.options.env || [],
-      data: {
-        ...this.readJsonFile(),
-        ...this.strToJSON(this.options.data || '{}'),
-      },
-    };
-  }
-
   buildAndStartDocker() {
     // Exec binary build
     this.log.info('Execute binary build');
-    const options = this.buildOptions({ format: CargoLambda.format.binary });
-    const artifacts = this.cargoLambdaBuild(options);
+    const options = this.cargoLambdaOptions({ format: CargoLambda.format.binary });
+    const artifacts = this.build(options);
 
     // Find artifact from function name
     const funcName = this.options.function;
@@ -323,27 +340,7 @@ class ServerlessRustPlugin {
     this.log.info(`  path: ${artifact.path}`);
 
     // docker run
-    const containerName = 'sls-rust-plugin';
-    this.docker = new Docker({
-      name: containerName,
-      arch: options.arch,
-      bin: path.basename(artifact.path),
-      env: this.options.env || [],
-      envFile: this.options['env-file'],
-      binDir: path.dirname(artifact.path),
-      port: this.dockerPort(),
-      addArgs: this.options['docker-args'],
-    });
-
-    this.log.info(`Docker run: ${this.docker.runCommand()}`);
-
-    const result = this.docker.run(spawnSync);
-
-    if (hasSpawnError(result)) {
-      throw this.error(`docker run error: ${result.error} ${result.status}`);
-    }
-
-    this.log.info(`Docker container is running. Name: ${containerName}`);
+    this.startDocker({ artifactPath: artifact.path });
   }
 
   async requestToDocker() {
@@ -358,6 +355,19 @@ class ServerlessRustPlugin {
     } catch (err) {
       throw this.error(err);
     }
+  }
+
+  startDocker({ artifactPath }) {
+    const options = this.dockerOptions({ artifactPath });
+    this.docker = new Docker(options);
+
+    this.log.info(`Docker run: ${this.docker.runCommand()}`);
+    const result = this.docker.run(spawnSync);
+
+    if (hasSpawnError(result)) {
+      throw this.error(`docker run error: ${result.status}`);
+    }
+    this.log.info(`Docker container is running. Name: ${options.name}`);
   }
 
   stopDocker({ silent } = { silent: false }) {

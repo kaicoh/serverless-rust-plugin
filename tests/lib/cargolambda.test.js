@@ -58,17 +58,17 @@ describe('CargoLambda', () => {
   });
 
   describe('method: _buildCmd', () => {
-    it('returns "docker" when useDocker is true', () => {
+    it('returns "docker" when "docker" option is true', () => {
       const options = {
-        useDocker: true,
+        docker: true,
       };
       const builder = new CargoLambda(cargo, options);
       expect(builder._buildCmd()).toEqual('docker');
     });
 
-    it('returns "cargo" when useDocker is false', () => {
+    it('returns "cargo" when "docker" option is false', () => {
       const options = {
-        useDocker: false,
+        docker: false,
       };
       const builder = new CargoLambda(cargo, options);
       expect(builder._buildCmd()).toEqual('cargo');
@@ -76,9 +76,9 @@ describe('CargoLambda', () => {
   });
 
   describe('method: _buildArgs', () => {
-    it('returns docker run command options when useDocker is true', () => {
+    it('returns docker run command options when "docker" option is true', () => {
       const options = {
-        useDocker: true,
+        docker: true,
         srcPath: 'test/path',
         dockerImage: 'sample:1.2.3',
         profile: 'release',
@@ -101,9 +101,9 @@ describe('CargoLambda', () => {
       ]));
     });
 
-    it('returns cargo command options when useDocker is false', () => {
+    it('returns cargo command options when "docker" option is false', () => {
       const options = {
-        useDocker: false,
+        docker: false,
         profile: 'debug',
         arch: 'arm64',
         format: 'zip',
@@ -203,7 +203,7 @@ describe('CargoLambda', () => {
   describe('method: buildCommand', () => {
     it('returns cargo lambda build command', () => {
       const options = {
-        useDocker: false,
+        docker: false,
         profile: 'release',
         arch: 'arm64',
         format: 'zip',
@@ -214,18 +214,18 @@ describe('CargoLambda', () => {
   });
 
   describe('method: howToBuild', () => {
-    it('says using docker when useDocker is true', () => {
+    it('says using docker when "docker" option is true', () => {
       const options = {
-        useDocker: true,
+        docker: true,
         dockerImage: 'sample:1.2.3',
       };
       const builder = new CargoLambda(cargo, options);
       expect(builder.howToBuild()).toEqual('Use docker image sample:1.2.3.');
     });
 
-    it('says using local cargo lambda when useDocker is false', () => {
+    it('says using local cargo lambda when "docker" option is false', () => {
       const options = {
-        useDocker: false,
+        docker: false,
       };
       const builder = new CargoLambda(cargo, options);
       expect(builder.howToBuild()).toEqual('Use local cargo-lambda.');
