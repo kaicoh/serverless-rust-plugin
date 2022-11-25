@@ -1,6 +1,6 @@
-# Multiple Binaries Example
+# Multi Binary Example
 
-For multiple binaries project.
+For multi binary project.
 
 ## Settings
 
@@ -10,7 +10,7 @@ There are some `[[bin]]` sections.
 
 ```
 [package]
-name = "multiple-binaries"
+name = "multi-binary"
 ...
 
 [[bin]]
@@ -40,10 +40,10 @@ plugins:
 
 functions:
   useFirstName:
-    handler: multiple-binaries.first
+    handler: multi-binary.first
 
   useLastName:
-    handler: multiple-binaries.last
+    handler: multi-binary.last
 ```
 
 ## Installation
