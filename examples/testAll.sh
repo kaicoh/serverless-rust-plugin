@@ -9,7 +9,7 @@ source ./commands.sh
 
 start_tests
 
-for project in simple multi-binary ddb-local
+for project in simple multi-binary ddb-local workspace
 do
     cd "${HERE}"/"${project}"
     echo
