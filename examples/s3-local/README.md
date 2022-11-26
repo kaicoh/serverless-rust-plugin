@@ -1,6 +1,6 @@
-# Simple Example
+# S3 Example
 
-For single binary.
+S3 example using serverless-s3-local.
 
 ## Settings
 
@@ -22,15 +22,15 @@ custom:
   rust
     local:
       envFile: .env
-      # Using this option, the lambda function container can access
-      # to services running on the local machine.
+      # Using this option, the lambda function container can access to services
+      # running on the local machine.
       dockerArgs: --add-host host.docker.internal:host-gateway
   s3:
     address: 127.0.0.1
     directory: ./buckets
     # [[important]]
-    # Without this option, the hostname "host.docker.internal" is interpreted
-    # as a bucket name regardless of the setting.
+    # Without this option, the hostname "host.docker.internal" is interpreted as a bucket name
+    # regardless of the setting.
     # For more info, see: https://github.com/jamhall/s3rver/pull/632
     vhostBuckets: false
 
