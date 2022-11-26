@@ -39,6 +39,9 @@ describe('ServerlessRustPlugin', () => {
       },
       config: {},
       classes: { Error },
+      configSchemaHandler: {
+        defineFunctionProperties: jest.fn(),
+      },
     };
   }
 

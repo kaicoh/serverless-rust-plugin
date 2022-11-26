@@ -42,6 +42,24 @@ function hasSpawnError({ status }) {
 class ServerlessRustPlugin {
   constructor(serverless, options, { log }) {
     this.serverless = serverless;
+
+    this.serverless.configSchemaHandler.defineFunctionProperties('aws', {
+      properties: {
+        rust: {
+          type: 'object',
+          properties: {
+            port: { type: 'number' },
+            envFile: { type: 'string' },
+            dockerArgs: { type: 'string' },
+          },
+          required: [],
+          additionalProperties: false,
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    });
+
     this.options = options;
     this.log = log;
     this.srcPath = path.resolve(this.serverless.config.servicePath || '');
