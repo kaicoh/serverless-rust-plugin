@@ -118,9 +118,73 @@ describe('ServerlessRustPlugin', () => {
     });
 
     describe('sets commands', () => {
-      describe('rust:invoke:local', () => {
-        let command;
+      let command;
 
+      describe('rust:start', () => {
+        beforeEach(() => {
+          command = plugin.commands['rust:start'];
+        });
+
+        it('defines', () => {
+          expect(command).toBeDefined();
+        });
+
+        const lifecycleEvents = ['start'];
+
+        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
+          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
+        });
+      });
+
+      describe('rust:ps', () => {
+        beforeEach(() => {
+          command = plugin.commands['rust:ps'];
+        });
+
+        it('defines', () => {
+          expect(command).toBeDefined();
+        });
+
+        const lifecycleEvents = ['show'];
+
+        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
+          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
+        });
+      });
+
+      describe('rust:invoke', () => {
+        beforeEach(() => {
+          command = plugin.commands['rust:invoke'];
+        });
+
+        it('defines', () => {
+          expect(command).toBeDefined();
+        });
+
+        const lifecycleEvents = ['execute'];
+
+        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
+          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
+        });
+      });
+
+      describe('rust:stop', () => {
+        beforeEach(() => {
+          command = plugin.commands['rust:stop'];
+        });
+
+        it('defines', () => {
+          expect(command).toBeDefined();
+        });
+
+        const lifecycleEvents = ['stop'];
+
+        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
+          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
+        });
+      });
+
+      describe('rust:invoke:local', () => {
         beforeEach(() => {
           command = plugin.commands['rust:invoke:local'];
         });
