@@ -80,7 +80,7 @@ Or if your local machine installs docker, you can invoke your lambda by the foll
 $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 ```
 
-#### rust:invoke:local command options
+#### Options for rust:invoke:local command
 
 | option | shortcut | type | required | default| description |
 | :--- | :---: | :--- | :---: | :---: | :--- |
@@ -95,9 +95,9 @@ $ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 
 Need more examples? See [examples/simple](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).
 
-#### serverless.yml settings for rust:invoke:local command
+#### Configuration for rust:invoke:local command
 
-Using setup in serverless.yml, you can omit some rust:invoke:local options. For now `port`, `envFile` and `dockerArgs` are available.
+Using serverless.yml, you can omit some rust:invoke:local options. For now `port`, `envFile` and `dockerArgs` are available.
 
 ```
 custom:
