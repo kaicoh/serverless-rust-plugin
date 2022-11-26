@@ -1,0 +1,14 @@
+{
+  "scripts": {
+    "s3:start": "pm2 --name s3-local start sls -- s3 start",
+    "s3:ps": "pm2 list",
+    "s3:stop": "pm2 delete s3-local"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.216.0",
+    "pm2": "^5.2.2",
+    "serverless": "^3.24.1",
+    "serverless-rust-plugin": "file:../..",
+    "serverless-s3-local": "^0.6.22"
+  }
+}

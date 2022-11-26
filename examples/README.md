@@ -17,3 +17,7 @@ workspace example.
 ## Dynamodb local(/ddb-local)
 
 Lambda function accessing Dynamodb using docker-compose.
+
+## S3 local(/s3-local)
+
+Lambda function accessing S3 using [serverless-s3-local](https://github.com/ar90n/serverless-s3-local).
