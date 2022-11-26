@@ -315,7 +315,9 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: getRustFunctions', () => {
+  describe('getter: rustFunctions', () => {
+    let result;
+
     beforeEach(() => {
       // Suppose there are 2 binary definitions in Cargo.toml
       // Cargo.toml
@@ -334,10 +336,9 @@ describe('ServerlessRustPlugin', () => {
       Cargo.mockImplementationOnce(() => ({
         binaries: jest.fn(() => ['unit-test.bin0', 'unit-test.bin1']),
       }));
-    });
 
-    it('returns function names whose handler is equal to one of the binary names', () => {
-      // Suppose there are 3 function definitions in serverless.yml
+      // And suppose there are 3 function definitions in serverless.yml
+      //
       // serverless.yml
       //
       // functions
@@ -360,10 +361,37 @@ describe('ServerlessRustPlugin', () => {
         .mockImplementation(() => ({ handler: 'non-of-the-above' }));
 
       plugin = new ServerlessRustPlugin(serverless, options, utils);
+      result = plugin.rustFunctions;
+    });
 
-      const result = plugin.getRustFunctions();
-      expect(result).toHaveLength(2);
-      expect(result).toEqual(expect.arrayContaining(['rustFunc0', 'rustFunc1']));
+    it('returns a Map includes only rust functions', () => {
+      expect(result).toBeInstanceOf(Map);
+      expect(result.size).toEqual(2);
+    });
+
+    it('returns a Map whose key is function name and value is function configuration', () => {
+      expect(result.get('rustFunc0')).toEqual(expect.objectContaining({
+        handler: 'unit-test.bin0',
+      }));
+      expect(result.get('rustFunc1')).toEqual(expect.objectContaining({
+        handler: 'unit-test.bin1',
+      }));
+    });
+  });
+
+  describe('method: getRustFunctions', () => {
+    beforeEach(() => {
+      const map = new Map();
+      map.set('func0', {});
+      map.set('func1', {});
+
+      jest.spyOn(plugin, 'rustFunctions', 'get').mockReturnValue(map);
+    });
+
+    it('returns an array from rust function names', () => {
+      expect(plugin.getRustFunctions()).toEqual(expect.arrayContaining([
+        'func0', 'func1',
+      ]));
     });
   });
 
@@ -388,13 +416,16 @@ describe('ServerlessRustPlugin', () => {
       //   rustFunc1:
       //     handler: unit-test.bin1
       //     ...
-      plugin.getRustFunctions = jest.fn(() => ['rustFunc0', 'rustFunc1']);
       plugin.deployArtifactDir = jest.fn(() => 'deploy');
 
       CargoLambda.format = { zip: 'zip' };
 
       rustFunc0 = { handler: 'unit-test.bin0', package: { foo: 'bar' } };
       rustFunc1 = { handler: 'unit-test.bin1' };
+
+      jest.spyOn(plugin, 'rustFunctions', 'get').mockReturnValue(
+        new Map([['rustFunc0', rustFunc0], ['rustFunc1', rustFunc1]]),
+      );
 
       serverless.service.getFunction
         .mockImplementationOnce(() => rustFunc0)
@@ -1169,6 +1200,110 @@ describe('ServerlessRustPlugin', () => {
         await expect(() => plugin.invokeLocal()).rejects.toThrow(/some error/);
         expect(plugin.stopDocker).toHaveBeenCalledWith({ silent: true });
       });
+    });
+  });
+
+  describe('getter: funcSettings', () => {
+    let result;
+
+    // Suppose serverless.yml like following
+    //
+    // provider
+    //   environment:
+    //     FOO: VAR
+    //
+    // custom:
+    //   rust:
+    //     local:
+    //       envFile: env.global
+    //       dockerArgs: --global
+    //
+    // functions:
+    //   func0:
+    //     port: 3000
+    //     envFile: env.local
+    //     dockerArgs: --local
+    //
+    //   func1:
+    //     environment:
+    //       FOO: VARBAZ
+    //       VAR: BAZ
+    beforeEach(() => {
+      serverless.service.provider.environment = {
+        FOO: 'VAR',
+      };
+      serverless.service.custom.rust = {
+        local: {
+          envFile: 'env.global',
+          dockerArgs: '--global',
+        },
+      };
+
+      const map = new Map();
+      map.set('func0', {
+        rust: {
+          port: 3000,
+          envFile: 'env.local',
+          dockerArgs: '--local',
+        },
+      });
+      map.set('func1', {
+        environment: { FOO: 'VARBAZ', VAR: 'BAZ' },
+      });
+
+      jest.spyOn(plugin, 'rustFunctions', 'get').mockReturnValue(map);
+
+      result = plugin.funcSettings;
+    });
+
+    it('returns a Map from rust functions', () => {
+      expect(result).toBeInstanceOf(Map);
+      expect(result.size).toEqual(2);
+    });
+
+    it('sets port number from function configuration', () => {
+      expect(result.get('func0')).toEqual(expect.objectContaining({
+        port: 3000,
+      }));
+    });
+
+    it('sets port number 0 if there is no port configuration in function', () => {
+      expect(result.get('func1')).toEqual(expect.objectContaining({
+        port: 0,
+      }));
+    });
+
+    it('sets env file from function configuration', () => {
+      expect(result.get('func0')).toEqual(expect.objectContaining({
+        envFile: 'env.local',
+      }));
+    });
+
+    it('sets env file from global configuration if there is no env file configuration in function', () => {
+      expect(result.get('func1')).toEqual(expect.objectContaining({
+        envFile: 'env.global',
+      }));
+    });
+
+    it('sets environment from merging global and function configuration', () => {
+      expect(result.get('func0')).toEqual(expect.objectContaining({
+        environment: { FOO: 'VAR' },
+      }));
+      expect(result.get('func1')).toEqual(expect.objectContaining({
+        environment: { FOO: 'VARBAZ', VAR: 'BAZ' },
+      }));
+    });
+
+    it('sets docker args from function configuration', () => {
+      expect(result.get('func0')).toEqual(expect.objectContaining({
+        dockerArgs: '--local',
+      }));
+    });
+
+    it('sets docker args from global configuration if there is no docker args configuration in function', () => {
+      expect(result.get('func1')).toEqual(expect.objectContaining({
+        dockerArgs: '--global',
+      }));
     });
   });
 });

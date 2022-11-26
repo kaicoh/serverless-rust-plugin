@@ -55,7 +55,7 @@ class ServerlessRustPlugin {
           required: [],
           additionalProperties: false,
         },
-        required: [],
+        required: false,
         additionalProperties: false,
       },
     });
@@ -63,7 +63,6 @@ class ServerlessRustPlugin {
     this.options = options;
     this.log = log;
     this.srcPath = path.resolve(this.serverless.config.servicePath || '');
-    this.custom = (this.serverless.service.custom && this.serverless.service.custom.rust) || {};
     this.cargo = new Cargo(path.join(this.srcPath, 'Cargo.toml'));
 
     this.commands = {
@@ -203,20 +202,23 @@ class ServerlessRustPlugin {
 
   // `Static` settings from serverless.yml. This is distinguished from `Dynamic` options.
   get settings() {
+    const custom = (this.serverless.service.custom && this.serverless.service.custom.rust) || {};
     return {
       srcPath: this.srcPath,
 
+      environment: this.serverless.service.provider.environment || {},
+
       cargoLambda: {
-        docker: _get(this.custom, ['cargoLambda', 'docker'], true),
+        docker: _get(custom, ['cargoLambda', 'docker'], true),
         dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
-        profile: _get(this.custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
+        profile: _get(custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
         arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
       },
 
       local: {
-        port: _get(this.custom, ['local', 'port']),
-        envFile: _get(this.custom, ['local', 'envFile']),
-        dockerArgs: _get(this.custom, ['local', 'dockerArgs']),
+        port: _get(custom, ['local', 'port']),
+        envFile: _get(custom, ['local', 'envFile']),
+        dockerArgs: _get(custom, ['local', 'dockerArgs']),
       },
     };
   }
@@ -260,26 +262,8 @@ class ServerlessRustPlugin {
     };
   }
 
-  // MEMO:
-  // This plugin recognize rust function whether its handler value satisfies the syntax or not.
-  // [[syntax]]
-  // functions:
-  //   rustFuncOne:
-  //     handler: cargo-package-name
-  //
-  //   rustFuncTwo:
-  //     handler: cargo-package-name.bin-name
-  //
-  //   nonRustFunc:
-  //     handler: non-of-the-above
   getRustFunctions() {
-    const { service } = this.serverless;
-    const binaryNames = this.cargo.binaries();
-
-    return service.getAllFunctions().flatMap((funcName) => {
-      const func = service.getFunction(funcName);
-      return binaryNames.some((bin) => bin === func.handler) ? funcName : [];
-    });
+    return Array.from(this.rustFunctions.keys());
   }
 
   // MEMO:
@@ -289,8 +273,6 @@ class ServerlessRustPlugin {
   // so this plugin copies artifacts using each function name and deploys them.
   // See: https://github.com/serverless/serverless/issues/3696
   modifyFunctions({ artifacts, options }) {
-    const { service } = this.serverless;
-    const rustFunctions = this.getRustFunctions();
     const targetDir = this.deployArtifactDir(options.profile);
 
     const useZip = options.format === CargoLambda.format.zip;
@@ -298,8 +280,7 @@ class ServerlessRustPlugin {
 
     this.log.info('Modify rust function definitions');
 
-    rustFunctions.forEach((funcName) => {
-      const func = service.getFunction(funcName);
+    this.rustFunctions.forEach((func, funcName) => {
       const binaryName = func.handler;
 
       const buildArtifactPath = artifacts.path(binaryName);
@@ -315,12 +296,14 @@ class ServerlessRustPlugin {
       this.log.info(`    artifact: ${deployArtifactPath}`);
       this.log.info('    individually: true');
 
+      /* eslint-disable no-param-reassign */
       func.handler = handler;
       func.package = {
         ...(func.package || {}),
         artifact: deployArtifactPath,
         individually: true,
       };
+      /* eslint-enable no-param-reassign */
     });
   }
 
@@ -504,6 +487,53 @@ class ServerlessRustPlugin {
     }
   }
 
+  // MEMO:
+  // This plugin recognize rust function whether its handler value satisfies the syntax or not.
+  // [[syntax]]
+  // functions:
+  //   rustFuncOne:
+  //     handler: cargo-package-name
+  //
+  //   rustFuncTwo:
+  //     handler: cargo-package-name.bin-name
+  //
+  //   nonRustFunc:
+  //     handler: non-of-the-above
+  // Return Map<string, object>
+  //   key: function name
+  //   value: function configuration object
+  get rustFunctions() {
+    const { service } = this.serverless;
+    const binaryNames = this.cargo.binaries();
+
+    const map = new Map();
+
+    service.getAllFunctions().forEach((funcName) => {
+      const func = service.getFunction(funcName);
+
+      if (binaryNames.some((bin) => bin === func.handler)) {
+        map.set(funcName, func);
+      }
+    });
+
+    return map;
+  }
+
+  get funcSettings() {
+    const map = new Map();
+
+    this.rustFunctions.forEach((func, funcName) => {
+      map.set(funcName, {
+        port: _get(func, ['rust', 'port'], 0),
+        envFile: _get(func, ['rust', 'envFile']) || this.settings.local.envFile,
+        environment: { ...this.settings.environment, ...func.environment },
+        dockerArgs: _get(func, ['rust', 'dockerArgs']) || this.settings.local.dockerArgs,
+      });
+    });
+
+    return map;
+  }
+
   startCommand() {
     // rust:start:start event
     // 1. collect settings
@@ -519,6 +549,7 @@ class ServerlessRustPlugin {
     // 1. collect settings
     // 2. get current docker container status
     // 3. show outputs
+    this.log.notice(this.funcSettings);
     this.log.info('ps command called');
   }
 
