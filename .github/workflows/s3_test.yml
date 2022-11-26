@@ -3,7 +3,7 @@ name: s3_test
 on:
   push:
     branches:
-      - 'fix/test-workflow'
+      - 'fix/s3-test-workflow'
 
   workflow_dispatch:
 
