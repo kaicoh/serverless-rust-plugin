@@ -5,16 +5,12 @@ const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
 const _get = require('lodash.get');
-const _zip = require('lodash.zip');
+const { from, zip, mergeMap } = require('rxjs');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
 const Docker = require('./lib/docker');
 const request = require('./lib/request');
-
-const DEFAULT_DOCKER_TAG = 'latest';
-const DEFAULT_DOCKER_IMAGE = 'calavera/cargo-lambda';
-const NO_OUTPUT_CAPTURE = { stdio: ['ignore', process.stdout, process.stderr] };
 
 // https://serverless.com/blog/writing-serverless-plugins/
 // https://serverless.com/framework/docs/providers/aws/guide/plugins/
@@ -184,10 +180,14 @@ class ServerlessRustPlugin {
     };
 
     this.hooks = {
+      initialize: this.initialize.bind(this),
+
       'before:package:createDeploymentArtifacts': this.package.bind(this),
       'before:deploy:function:packageFunction': this.package.bind(this),
 
+      'before:rust:start:start': this.beforeStartCommand.bind(this),
       'rust:start:start': this.startCommand.bind(this),
+      'after:rust:start:start': this.afterStartCommand.bind(this),
 
       'rust:ps:show': this.psCommand.bind(this),
 
@@ -201,6 +201,14 @@ class ServerlessRustPlugin {
       'rust:invoke:local:invoke': this.invokeLocal.bind(this),
       'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
     };
+  }
+
+  initialize() {
+    // escape original handlers before overwriting
+    this.originalHandlers = new Map();
+    this.rustFunctions.forEach((func, funcName) => {
+      this.originalHandlers.set(funcName, func.handler);
+    });
   }
 
   // `Static` settings from serverless.yml. This is distinguished from `Dynamic` options.
@@ -217,7 +225,6 @@ class ServerlessRustPlugin {
 
       cargoLambda: {
         docker: _get(custom, ['cargoLambda', 'docker'], true),
-        dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
         profile: _get(custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
         arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
       },
@@ -228,6 +235,11 @@ class ServerlessRustPlugin {
         dockerArgs: _get(custom, ['local', 'dockerArgs']),
       },
     };
+  }
+
+  buildArtifactPath(funcName) {
+    const binName = this.originalHandlers.get(funcName);
+    return this.artifacts.path(binName);
   }
 
   deployArtifactDir(profile) {
@@ -279,7 +291,7 @@ class ServerlessRustPlugin {
   // But cargo lambda builds all artifacts into same name bootstrap(.zip),
   // so this plugin copies artifacts using each function name and deploys them.
   // See: https://github.com/serverless/serverless/issues/3696
-  modifyFunctions({ artifacts, options }) {
+  modifyFunctions({ options }) {
     const targetDir = this.deployArtifactDir(options.profile);
 
     const useZip = options.format === CargoLambda.format.zip;
@@ -288,9 +300,7 @@ class ServerlessRustPlugin {
     this.log.info('Modify rust function definitions');
 
     this.rustFunctions.forEach((func, funcName) => {
-      const binaryName = func.handler;
-
-      const buildArtifactPath = artifacts.path(binaryName);
+      const buildArtifactPath = this.buildArtifactPath(funcName);
       const deployArtifactPath = path.join(targetDir, `${funcName}${ext}`);
 
       copyFile(buildArtifactPath, deployArtifactPath);
@@ -314,7 +324,7 @@ class ServerlessRustPlugin {
     });
   }
 
-  build(options) {
+  async build(options) {
     if (this.serverless.service.provider.name !== 'aws') {
       throw this.error('Provider must be "aws" to use this plugin');
     }
@@ -329,35 +339,28 @@ class ServerlessRustPlugin {
       );
     }
 
-    const builder = new CargoLambda(this.cargo, options);
-
-    this.log.info('Start Cargo Lambda build');
-    this.log.info(builder.howToBuild());
-    this.log.info(`Running "${builder.buildCommand()}"`);
-
-    const { result, artifacts } = builder.build(spawnSync, NO_OUTPUT_CAPTURE);
+    const { result, artifacts } = await CargoLambda.build(this.cargo, options, { log: this.log });
 
     if (result.error || result.status > 0) {
       throw this.error(`Rust build encountered an error: ${result.error} ${result.status}.`);
     }
 
+    this.artifacts = artifacts;
     this.log.info('Complete Cargo Lambda build');
 
     artifacts.getAll().forEach(({ path: artifactPath }) => {
       this.log.info(`build artifact: ${artifactPath}`);
     });
-
-    return artifacts;
   }
 
   package() {
     const options = this.cargoLambdaOptions({ format: CargoLambda.format.zip });
-    const artifacts = this.build(options);
+    this.build(options);
 
     const targetDir = this.deployArtifactDir(options.profile);
     mkdirSyncIfNotExist(targetDir);
 
-    this.modifyFunctions({ artifacts, options });
+    this.modifyFunctions({ options });
 
     this.log.success('Complete building rust functions');
   }
@@ -513,24 +516,24 @@ class ServerlessRustPlugin {
     const { service } = this.serverless;
     const binaryNames = this.cargo.binaries();
 
-    const map = new Map();
+    const functions = new Map();
 
     service.getAllFunctions().forEach((funcName) => {
       const func = service.getFunction(funcName);
 
       if (binaryNames.some((bin) => bin === func.handler)) {
-        map.set(funcName, func);
+        functions.set(funcName, func);
       }
     });
 
-    return map;
+    return functions;
   }
 
   get funcSettings() {
-    const map = new Map();
+    const settings = new Map();
 
     this.rustFunctions.forEach((func, funcName) => {
-      map.set(funcName, {
+      settings.set(funcName, {
         containerName: _get(func, ['rust', 'containerName']) || `${this.settings.service}_${funcName}`,
         port: _get(func, ['rust', 'port'], 0),
         envFile: _get(func, ['rust', 'envFile']) || this.settings.local.envFile,
@@ -539,30 +542,49 @@ class ServerlessRustPlugin {
       });
     });
 
-    return map;
+    return settings;
   }
 
-  async startCommand() {
+  get funcSettings$() {
+    return from(this.funcSettings);
+  }
+
+  get currentContainers$() {
+    return this.funcSettings$.pipe(
+      mergeMap(([, { containerName }]) => Container.get(containerName)),
+    );
+  }
+
+  beforeStartCommand() {
+    // before:rust:start:start event
+    const options = this.cargoLambdaOptions({ format: CargoLambda.format.binary });
+    this.build(options);
+  }
+
+  startCommand() {
     // rust:start:start event
     // 1. collect settings
-    const funcSettings = Array.from(this.funcSettings);
-
     // 2. get current docker container status
-    const containers = await Promise.all(
-      funcSettings.map(([, { containerName }]) => Container.get(containerName)),
-    );
+    zip(this.funcSettings$, this.currentContainers$).pipe(
+      // 3. start the container process if it has not started yet.
+      mergeMap(([[funcName, funcSetting], container]) => {
+        const options = {
+          artifact: this.buildArtifactPath(funcName),
+          arch: this.settings.cargoLambda.arch,
+          ...funcSetting,
+        };
 
-    const settingWithContainers = _zip(funcSettings, containers)
-      .map(([funcName, funcSetting], container) => [funcName, funcSetting, container]);
+        return container.start(options);
+      }),
+    ).subscribe(({ message }) => {
+      this.log.info(message);
+    });
+  }
 
-    // 3. determine which containers to start
-    const functionsToStartContainer = settingWithContainers
-      .filter(([,, container]) => !container.isRunning)
-      .map(([funcName, funcSetting]) => [funcName, funcSetting]);
-
-    // 4. start containers
-    // 5. show outputs
-    this.log.info('start command called');
+  afterStartCommand() {
+    // after:rust:start:start event
+    // 1. monitor docker containers
+    this.log.info('after start command called');
   }
 
   psCommand() {

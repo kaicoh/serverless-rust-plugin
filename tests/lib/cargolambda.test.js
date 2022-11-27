@@ -1,308 +1,133 @@
 const CargoLambda = require('../../lib/cargolambda');
+const utils = require('../../lib/utils');
+
+jest.mock('../../lib/utils');
 
 describe('CargoLambda', () => {
-  let cargo;
+  describe('function: build', () => {
+    const cargo = { binaries: () => ['bin0', 'bin1'] };
+    const srcPath = 'test/path';
+    const log = { info: jest.fn() };
 
-  beforeEach(() => {
-    cargo = {};
-  });
-
-  describe('method: _buildOptions', () => {
-    it('includes --release option when profile is release', () => {
-      const options = {
-        profile: CargoLambda.profile.release,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--release']));
-    });
-
-    it('does not include --release option when profile is not release', () => {
-      const options = {
-        profile: CargoLambda.profile.debug,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--release']));
-    });
-
-    it('includes --output-format option when format is zip', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--output-format', 'zip']));
-    });
-
-    it('does not include --output-format option when format is not zip', () => {
-      const options = {
-        format: CargoLambda.format.binary,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--output-format', 'zip']));
-    });
-
-    it('includes --arm64 option when architecture is arm64', () => {
-      const options = {
-        arch: CargoLambda.architecture.arm64,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.arrayContaining(['--arm64']));
-    });
-
-    it('does not include --arm64 option when architecture is not arm64', () => {
-      const options = {
-        arch: CargoLambda.architecture.x86_64,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildOptions()).toEqual(expect.not.arrayContaining(['--arm64']));
-    });
-  });
-
-  describe('method: _buildCmd', () => {
-    it('returns "docker" when "docker" option is true', () => {
-      const options = {
-        docker: true,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildCmd()).toEqual('docker');
-    });
-
-    it('returns "cargo" when "docker" option is false', () => {
-      const options = {
-        docker: false,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._buildCmd()).toEqual('cargo');
-    });
-  });
-
-  describe('method: _buildArgs', () => {
-    it('returns docker run command options when "docker" option is true', () => {
-      const options = {
-        docker: true,
-        srcPath: 'test/path',
-        dockerImage: 'sample:1.2.3',
-        profile: 'release',
-        arch: 'x86_64',
-        format: 'binary',
-      };
-      const builder = new CargoLambda(cargo, options);
-
-      expect(builder._buildArgs()).toEqual(expect.arrayContaining([
-        'run',
-        '--rm',
-        '-t',
-        '-v',
-        'test/path:/tmp',
-        '-w',
-        '/tmp',
-        'sample:1.2.3',
-        'build',
-        '--release',
-      ]));
-    });
-
-    it('returns cargo command options when "docker" option is false', () => {
-      const options = {
-        docker: false,
-        profile: 'debug',
-        arch: 'arm64',
-        format: 'zip',
-      };
-      const builder = new CargoLambda(cargo, options);
-
-      expect(builder._buildArgs()).toEqual(expect.arrayContaining([
-        'lambda',
-        'build',
-        '--arm64',
-        '--output-format',
-        'zip',
-      ]));
-    });
-  });
-
-  describe('method: _artifacts', () => {
-    let builder;
+    const subject = (options) => CargoLambda.build(cargo, options, { log });
 
     beforeEach(() => {
-      const options = { format: 'zip' };
-      builder = new CargoLambda(cargo, options);
-
-      builder.cargo = { binaries: jest.fn(() => ['bin0', 'bin1']) };
-      builder._artifactPath = jest.fn((bin) => `build/${bin}/bootstrap.zip`);
+      utils.spawn = jest.fn(() => Promise.resolve({ status: 999 }));
     });
 
-    it('returns an array containing artifact name and path', () => {
-      const expected = expect.arrayContaining([{
-        name: 'bin0',
-        path: 'build/bin0/bootstrap.zip',
-      }, {
-        name: 'bin1',
-        path: 'build/bin1/bootstrap.zip',
-      }]);
-
-      expect(builder._artifacts()).toEqual(expected);
-    });
-  });
-
-  describe('method _useZip', () => {
-    it('returns true when format is zip', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._useZip()).toBe(true);
-    });
-
-    it('returns false when format is not zip', () => {
-      const options = {
-        format: CargoLambda.format.binary,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._useZip()).toBe(false);
-    });
-  });
-
-  describe('method: _artifactExt', () => {
-    it('returns ".zip" when format is zip', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._artifactExt()).toEqual('.zip');
-    });
-
-    it('returns empty string when format is not zip', () => {
-      const options = {
-        format: CargoLambda.format.binary,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._artifactExt()).toEqual('');
-    });
-  });
-
-  describe('method: _artifactPath', () => {
-    it('takes away package name if given binary name has', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-        srcPath: 'test/path',
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._artifactPath('package.binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
-    });
-
-    it('uses argument if it does not have package name', () => {
-      const options = {
-        format: CargoLambda.format.zip,
-        srcPath: 'test/path',
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder._artifactPath('binName')).toEqual('test/path/target/lambda/binName/bootstrap.zip');
-    });
-  });
-
-  describe('method: buildCommand', () => {
-    it('returns cargo lambda build command', () => {
-      const options = {
-        docker: false,
-        profile: 'release',
-        arch: 'arm64',
-        format: 'zip',
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder.buildCommand()).toEqual('cargo lambda build --release --arm64 --output-format zip');
-    });
-  });
-
-  describe('method: howToBuild', () => {
-    it('says using docker when "docker" option is true', () => {
-      const options = {
-        docker: true,
-        dockerImage: 'sample:1.2.3',
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder.howToBuild()).toEqual('Use docker image sample:1.2.3.');
-    });
-
-    it('says using local cargo lambda when "docker" option is false', () => {
-      const options = {
-        docker: false,
-      };
-      const builder = new CargoLambda(cargo, options);
-      expect(builder.howToBuild()).toEqual('Use local cargo-lambda.');
-    });
-  });
-
-  describe('method: build', () => {
-    let builder;
-    let mockSpawn;
-    let output;
-    let args;
-
-    beforeEach(() => {
-      builder = new CargoLambda(cargo, {});
-      builder._buildCmd = jest.fn(() => 'buildCmd');
-      builder._buildArgs = jest.fn(() => ['arg0', 'arg1', 'arg2']);
-      builder._artifacts = jest.fn(() => []);
-
-      mockSpawn = jest.fn(() => 'mock return');
-    });
-
-    it('passes _buildCmd output to spawn function as 1st argument', () => {
-      output = builder.build(mockSpawn, { foo: 'bar' });
-      args = mockSpawn.mock.lastCall;
-
-      expect(args[0]).toEqual('buildCmd');
-    });
-
-    it('passes _buildArgs output to spawn function as 2nd argument', () => {
-      output = builder.build(mockSpawn, { foo: 'bar' });
-      args = mockSpawn.mock.lastCall;
-
-      expect(args[1]).toEqual(expect.arrayContaining(['arg0', 'arg1', 'arg2']));
-    });
-
-    it('passes 1st argument of itself to spawn function as 3rd argument', () => {
-      output = builder.build(mockSpawn, { foo: 'bar' });
-      args = mockSpawn.mock.lastCall;
-
-      expect(args[2]).toEqual(expect.objectContaining({ foo: 'bar' }));
-    });
-
-    describe('returns an object', () => {
-      it('contains "result" property is equal to what spawn function returns', () => {
-        output = builder.build(mockSpawn, { foo: 'bar' });
-        expect(output.result).toEqual('mock return');
+    describe('calls "utils.spawn"', () => {
+      it('with command "docker" if option docker is true', async () => {
+        await subject({ docker: true, srcPath });
+        expect(utils.spawn.mock.lastCall[0]).toEqual('docker');
       });
 
-      describe('contains "artifacts" property', () => {
-        beforeEach(() => {
-          builder._artifacts = jest.fn(() => [{
-            name: 'bin0',
-            path: 'build/bin0/bootstrap.zip',
-          }, {
-            name: 'bin1',
-            path: 'build/bin1/bootstrap.zip',
-          }]);
+      it('with command "cargo" if option docker is false', async () => {
+        await subject({ docker: false, srcPath });
+        expect(utils.spawn.mock.lastCall[0]).toEqual('cargo');
+      });
 
-          output = builder.build(mockSpawn, { foo: 'bar' });
-        });
+      it('with arguments for docker run if option docker is true', async () => {
+        await subject({ docker: true, srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+          'run',
+          '--rm',
+          '-t',
+          '-v',
+          'test/path:/tmp',
+          '-w',
+          '/tmp',
+          'calavera/cargo-lambda:latest',
+          'build',
+        ]));
+      });
 
-        it('has getAll method to return all artifacts object', () => {
-          const expected = expect.arrayContaining([{
-            name: 'bin0',
-            path: 'build/bin0/bootstrap.zip',
-          }, {
-            name: 'bin1',
-            path: 'build/bin1/bootstrap.zip',
-          }]);
-          expect(output.artifacts.getAll()).toEqual(expected);
-        });
+      it('with arguments for cargo lambda if option docker is false', async () => {
+        await subject({ docker: false, srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+          'lambda',
+          'build',
+        ]));
+      });
 
-        it('has path method to return one artifact path', () => {
-          expect(output.artifacts.path('bin0')).toEqual('build/bin0/bootstrap.zip');
-          expect(output.artifacts.path('bin1')).toEqual('build/bin1/bootstrap.zip');
-          expect(output.artifacts.path('bin2')).toBeUndefined();
-        });
+      it('with release flag when profile options is release', async () => {
+        await subject({ profile: 'release', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+          '--release',
+        ]));
+      });
+
+      it('without release flag when profile options isn\'t release', async () => {
+        await subject({ profile: 'debug', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.not.arrayContaining([
+          '--release',
+        ]));
+      });
+
+      it('with arm64 flag when arch options is arm64', async () => {
+        await subject({ arch: 'arm64', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+          '--arm64',
+        ]));
+      });
+
+      it('without arm64 flag when arch options isn\'t arm64', async () => {
+        await subject({ arch: 'x86_64', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.not.arrayContaining([
+          '--arm64',
+        ]));
+      });
+
+      it('with format zip flag when format options is zip', async () => {
+        await subject({ format: 'zip', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+          '--output-format',
+          'zip',
+        ]));
+      });
+
+      it('without format zip flag when format options isn\'t zip', async () => {
+        await subject({ format: 'binary', srcPath });
+        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.not.arrayContaining([
+          '--output-format',
+          'zip',
+        ]));
+      });
+    });
+  });
+
+  describe('Artifacts class', () => {
+    let artifacts;
+    let instance;
+
+    beforeEach(() => {
+      artifacts = [{ name: 'foo', path: 'test/foo' }, { name: 'bar', path: 'test/bar' }];
+      instance = new CargoLambda.Artifacts(artifacts);
+    });
+
+    describe('property isEmpty', () => {
+      it('returns false when there are some artifacts', () => {
+        expect(instance.isEmpty).toBe(false);
+      });
+
+      it('returns true when there are no artifacts', () => {
+        instance = new CargoLambda.Artifacts([]);
+        expect(instance.isEmpty).toBe(true);
+      });
+    });
+
+    describe('method getAll', () => {
+      it('returns inner artifacts', () => {
+        expect(instance.getAll()).toEqual(expect.arrayContaining(artifacts));
+      });
+    });
+
+    describe('method path', () => {
+      it('returns the path of the artifact which matches the given name', () => {
+        expect(instance.path('bar')).toEqual('test/bar');
+      });
+
+      it('returns undefined when there are no matched artifact from given name', () => {
+        expect(instance.path('barbaz')).toBeUndefined();
       });
     });
   });

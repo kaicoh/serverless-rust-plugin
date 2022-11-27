@@ -26,6 +26,13 @@ describe('Container', () => {
       expect(result).toBeInstanceOf(Container);
       expect(result._state).toEqual({ foo: 'bar' });
     });
+
+    it('resolves an Container instance using empty state when spawn return nothing', async () => {
+      utils.spawn = jest.fn(() => Promise.resolve({ stdout: '' }));
+      const result = await Container.get('some');
+      expect(result).toBeInstanceOf(Container);
+      expect(result._state).toEqual({});
+    });
   });
 
   describe('property: "name"', () => {

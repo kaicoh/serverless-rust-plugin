@@ -272,14 +272,6 @@ describe('ServerlessRustPlugin', () => {
       });
     });
 
-    describe('returns an object with property "dockerImage"', () => {
-      it('is equal to "calavera/cargo-lambda:latest"', () => {
-        expect(plugin.cargoLambdaOptions(args)).toEqual(expect.objectContaining({
-          dockerImage: 'calavera/cargo-lambda:latest',
-        }));
-      });
-    });
-
     describe('returns an object with property "profile"', () => {
       it('is equal to "release" by default', () => {
         expect(plugin.cargoLambdaOptions(args)).toEqual(expect.objectContaining({
@@ -408,7 +400,6 @@ describe('ServerlessRustPlugin', () => {
 
   describe('method: modifyFunctions', () => {
     // modifyFunctions arguments
-    let artifacts;
     let cargoLambdaOptions;
 
     // function definitions in serverless.yml
@@ -447,14 +438,12 @@ describe('ServerlessRustPlugin', () => {
     describe('with "zip" option', () => {
       beforeEach(() => {
         cargoLambdaOptions = { format: CargoLambda.format.zip };
-        artifacts = {
-          path: jest.fn()
-            .mockImplementationOnce(() => 'build/bin0.zip')
-            .mockImplementationOnce(() => 'build/bin1.zip')
-            .mockImplementation(() => 'build/others'),
-        };
+        plugin.buildArtifactPath = jest.fn()
+          .mockImplementationOnce(() => 'build/bin0.zip')
+          .mockImplementationOnce(() => 'build/bin1.zip')
+          .mockImplementation(() => 'build/others');
 
-        plugin.modifyFunctions({ artifacts, options: cargoLambdaOptions });
+        plugin.modifyFunctions({ options: cargoLambdaOptions });
       });
 
       it('copys artifacts to deploy path for each function', () => {
@@ -499,14 +488,12 @@ describe('ServerlessRustPlugin', () => {
     describe('without "zip" option', () => {
       beforeEach(() => {
         cargoLambdaOptions = { format: 'nonzip' };
-        artifacts = {
-          path: jest.fn()
-            .mockImplementationOnce(() => 'build/bin0')
-            .mockImplementationOnce(() => 'build/bin1')
-            .mockImplementation(() => 'build/others'),
-        };
+        plugin.buildArtifactPath = jest.fn()
+          .mockImplementationOnce(() => 'build/bin0')
+          .mockImplementationOnce(() => 'build/bin1')
+          .mockImplementation(() => 'build/others');
 
-        plugin.modifyFunctions({ artifacts, options: cargoLambdaOptions });
+        plugin.modifyFunctions({ options: cargoLambdaOptions });
       });
 
       it('copys artifacts to deploy path for each function', () => {
@@ -551,7 +538,6 @@ describe('ServerlessRustPlugin', () => {
 
   describe('method: build', () => {
     // An instance of mocked CargoLambda class
-    let builder;
     let cargoLambdaOptions;
     let buildOutput;
 
@@ -562,53 +548,39 @@ describe('ServerlessRustPlugin', () => {
         artifacts: { getAll: jest.fn(() => [{ path: 'build/target/bin' }]) },
       };
 
-      CargoLambda.mockClear();
-      CargoLambda.mockImplementation(() => {
-        builder = {
-          buildCommand: jest.fn(() => ['buildCommand', 'output']),
-          howToBuild: jest.fn(() => 'somehow'),
-          build: jest.fn(() => buildOutput),
-        };
-        return builder;
-      });
+      CargoLambda.build = jest.fn(() => Promise.resolve(buildOutput));
 
       plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
     });
 
-    it('throws an error if provider is not aws', () => {
+    it('throws an error if provider is not aws', async () => {
       serverless.service.provider.name = 'azuru';
-      expect(() => plugin.build(cargoLambdaOptions)).toThrow(/Provider must be "aws" to use this plugin/);
+      await expect(() => plugin.build(cargoLambdaOptions)).rejects.toThrow(/Provider must be "aws" to use this plugin/);
     });
 
-    it('throws an error if there are no rust functions in serverless.yml', () => {
+    it('throws an error if there are no rust functions in serverless.yml', async () => {
       plugin.getRustFunctions = jest.fn(() => []);
-      expect(() => plugin.build(cargoLambdaOptions)).toThrow(/no Rust functions found/);
+      await expect(() => plugin.build(cargoLambdaOptions)).rejects.toThrow(/no Rust functions found/);
     });
 
-    it('passes cargoLambdaOptions to CargoLambda constructor', () => {
-      plugin.build(cargoLambdaOptions);
-      expect(CargoLambda).toHaveBeenCalledTimes(1);
-      expect(CargoLambda).toHaveBeenCalledWith(plugin.cargo, cargoLambdaOptions);
+    it('passes cargoLambdaOptions to CargoLambda.build function', async () => {
+      await plugin.build(cargoLambdaOptions);
+      expect(CargoLambda.build).toHaveBeenCalledTimes(1);
+      expect(CargoLambda.build)
+        .toHaveBeenCalledWith(plugin.cargo, cargoLambdaOptions, expect.anything());
     });
 
-    it('calls build method of builder', () => {
-      plugin.build(cargoLambdaOptions);
-      expect(builder.build).toHaveBeenCalledTimes(1);
-      expect(builder.build).toHaveBeenCalledWith(spawnSync, expect.objectContaining({
-        stdio: ['ignore', process.stdout, process.stderr],
-      }));
-    });
-
-    it('throws an error if builder.build method returns a failed result', () => {
+    it('throws an error if CargoLambda.build returns a failed result', async () => {
       buildOutput = {
         result: { status: 1, error: 'some error' },
         artifacts: { getAll: jest.fn(() => []) },
       };
-      expect(() => plugin.build(cargoLambdaOptions)).toThrow(/some error/);
+      await expect(() => plugin.build(cargoLambdaOptions)).rejects.toThrow(/some error/);
     });
 
-    it('returns buildOutput.artifacts', () => {
-      expect(plugin.build(cargoLambdaOptions)).toEqual(buildOutput.artifacts);
+    it('sets buildOutput.artifacts to plugin.artifacts', async () => {
+      await plugin.build(cargoLambdaOptions);
+      expect(plugin.artifacts).toEqual(buildOutput.artifacts);
     });
   });
 
@@ -652,9 +624,8 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.deployArtifactDir).toHaveBeenCalledWith('dev');
     });
 
-    it('calls plugin.modifyFunctions with build artifacts and cargoLambdaOptions', () => {
+    it('calls plugin.modifyFunctions with cargoLambdaOptions', () => {
       const expected = expect.objectContaining({
-        artifacts,
         options: cargoLambdaOptions,
       });
 
