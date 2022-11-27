@@ -5,8 +5,10 @@ const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
 const _get = require('lodash.get');
+const _zip = require('lodash.zip');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
+const Container = require('./lib/container');
 const Docker = require('./lib/docker');
 const request = require('./lib/request');
 
@@ -48,6 +50,7 @@ class ServerlessRustPlugin {
         rust: {
           type: 'object',
           properties: {
+            containerName: { type: 'string' },
             port: { type: 'number' },
             envFile: { type: 'string' },
             dockerArgs: { type: 'string' },
@@ -202,8 +205,12 @@ class ServerlessRustPlugin {
 
   // `Static` settings from serverless.yml. This is distinguished from `Dynamic` options.
   get settings() {
-    const custom = (this.serverless.service.custom && this.serverless.service.custom.rust) || {};
+    const { service } = this.serverless;
+    const custom = _get(service, ['custom', 'rust'], {});
+
     return {
+      service: service.service || _get(service, ['serviceObject', 'name'], ''),
+
       srcPath: this.srcPath,
 
       environment: this.serverless.service.provider.environment || {},
@@ -524,6 +531,7 @@ class ServerlessRustPlugin {
 
     this.rustFunctions.forEach((func, funcName) => {
       map.set(funcName, {
+        containerName: _get(func, ['rust', 'containerName']) || `${this.settings.service}_${funcName}`,
         port: _get(func, ['rust', 'port'], 0),
         envFile: _get(func, ['rust', 'envFile']) || this.settings.local.envFile,
         environment: { ...this.settings.environment, ...func.environment },
@@ -534,11 +542,24 @@ class ServerlessRustPlugin {
     return map;
   }
 
-  startCommand() {
+  async startCommand() {
     // rust:start:start event
     // 1. collect settings
+    const funcSettings = Array.from(this.funcSettings);
+
     // 2. get current docker container status
+    const containers = await Promise.all(
+      funcSettings.map(([, { containerName }]) => Container.get(containerName)),
+    );
+
+    const settingWithContainers = _zip(funcSettings, containers)
+      .map(([funcName, funcSetting], container) => [funcName, funcSetting, container]);
+
     // 3. determine which containers to start
+    const functionsToStartContainer = settingWithContainers
+      .filter(([,, container]) => !container.isRunning)
+      .map(([funcName, funcSetting]) => [funcName, funcSetting]);
+
     // 4. start containers
     // 5. show outputs
     this.log.info('start command called');
@@ -549,7 +570,7 @@ class ServerlessRustPlugin {
     // 1. collect settings
     // 2. get current docker container status
     // 3. show outputs
-    this.log.notice(this.funcSettings);
+    this.log.notice(this.settings);
     this.log.info('ps command called');
   }
 

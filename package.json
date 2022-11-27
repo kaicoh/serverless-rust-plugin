@@ -28,6 +28,7 @@
   "homepage": "https://github.com/kaicoh/serverless-rust-plugin#readme",
   "dependencies": {
     "lodash.get": "^4.4.2",
+    "lodash.zip": "^4.2.0",
     "serverless": "3",
     "toml": "^3.0.0"
   },

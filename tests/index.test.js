@@ -83,6 +83,17 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.hooks[event]).toBeDefined();
     });
 
+    it('uses service name from serverless.service.service', () => {
+      serverless.service.service = 'my-service';
+      expect(plugin.settings.service).toEqual('my-service');
+    });
+
+    it('uses serviceObject name if serverless.service.service is undefined', () => {
+      serverless.service.service = undefined;
+      serverless.service.serviceObject = { name: 'service-object' };
+      expect(plugin.settings.service).toEqual('service-object');
+    });
+
     describe('when "serverless.config.servicePath" is undefined', () => {
       const expectedSrcPath = rootDir;
 
@@ -1220,28 +1231,37 @@ describe('ServerlessRustPlugin', () => {
     //
     // functions:
     //   func0:
-    //     port: 3000
-    //     envFile: env.local
-    //     dockerArgs: --local
+    //     rust:
+    //       containerName: myFunc
+    //       port: 3000
+    //       envFile: env.local
+    //       dockerArgs: --local
     //
     //   func1:
     //     environment:
     //       FOO: VARBAZ
     //       VAR: BAZ
     beforeEach(() => {
-      serverless.service.provider.environment = {
-        FOO: 'VAR',
-      };
-      serverless.service.custom.rust = {
-        local: {
-          envFile: 'env.global',
-          dockerArgs: '--global',
+      serverless.service = {
+        service: 'my-service',
+        serviceObject: { name: 'your-service' },
+        provider: {
+          environment: { FOO: 'VAR' },
+        },
+        custom: {
+          rust: {
+            local: {
+              envFile: 'env.global',
+              dockerArgs: '--global',
+            },
+          },
         },
       };
 
       const map = new Map();
       map.set('func0', {
         rust: {
+          containerName: 'myFunc',
           port: 3000,
           envFile: 'env.local',
           dockerArgs: '--local',
@@ -1259,6 +1279,18 @@ describe('ServerlessRustPlugin', () => {
     it('returns a Map from rust functions', () => {
       expect(result).toBeInstanceOf(Map);
       expect(result.size).toEqual(2);
+    });
+
+    it('sets container name from function configuration', () => {
+      expect(result.get('func0')).toEqual(expect.objectContaining({
+        containerName: 'myFunc',
+      }));
+    });
+
+    it('sets default container name if there is no container name configuration in function', () => {
+      expect(result.get('func1')).toEqual(expect.objectContaining({
+        containerName: 'my-service_func1',
+      }));
     });
 
     it('sets port number from function configuration', () => {
