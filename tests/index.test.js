@@ -1290,10 +1290,10 @@ describe('ServerlessRustPlugin', () => {
 
     it('sets environment from merging global and function configuration', () => {
       expect(result.get('func0')).toEqual(expect.objectContaining({
-        environment: { FOO: 'VAR' },
+        env: { FOO: 'VAR' },
       }));
       expect(result.get('func1')).toEqual(expect.objectContaining({
-        environment: { FOO: 'VARBAZ', VAR: 'BAZ' },
+        env: { FOO: 'VARBAZ', VAR: 'BAZ' },
       }));
     });
 

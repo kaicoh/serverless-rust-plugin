@@ -30,6 +30,7 @@
     "lodash.get": "^4.4.2",
     "rxjs": "^7.5.7",
     "serverless": "3",
+    "table": "^6.8.1",
     "toml": "^3.0.0"
   },
   "devDependencies": {

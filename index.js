@@ -5,7 +5,14 @@ const fs = require('fs');
 const http = require('http');
 const { spawnSync } = require('child_process');
 const _get = require('lodash.get');
-const { from, zip, mergeMap } = require('rxjs');
+const {
+  from,
+  zip,
+  map,
+  reduce,
+  mergeMap,
+} = require('rxjs');
+const { table } = require('table');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
@@ -185,11 +192,11 @@ class ServerlessRustPlugin {
       'before:package:createDeploymentArtifacts': this.package.bind(this),
       'before:deploy:function:packageFunction': this.package.bind(this),
 
-      'before:rust:start:start': this.beforeStartCommand.bind(this),
-      'rust:start:start': this.startCommand.bind(this),
-      'after:rust:start:start': this.afterStartCommand.bind(this),
+      'before:rust:start:start': this.buildBinary.bind(this),
+      'rust:start:start': this.startContainers.bind(this),
+      'after:rust:start:start': this.showContainerStatus.bind(this),
 
-      'rust:ps:show': this.psCommand.bind(this),
+      'rust:ps:show': this.showContainerStatus.bind(this),
 
       'before:rust:invoke:execute': this.beforeInvokeCommand.bind(this),
       'rust:invoke:execute': this.invokeCommand.bind(this),
@@ -537,7 +544,7 @@ class ServerlessRustPlugin {
         containerName: _get(func, ['rust', 'containerName']) || `${this.settings.service}_${funcName}`,
         port: _get(func, ['rust', 'port'], 0),
         envFile: _get(func, ['rust', 'envFile']) || this.settings.local.envFile,
-        environment: { ...this.settings.environment, ...func.environment },
+        env: { ...this.settings.environment, ...func.environment },
         dockerArgs: _get(func, ['rust', 'dockerArgs']) || this.settings.local.dockerArgs,
       });
     });
@@ -555,45 +562,58 @@ class ServerlessRustPlugin {
     );
   }
 
-  beforeStartCommand() {
-    // before:rust:start:start event
-    const options = this.cargoLambdaOptions({ format: CargoLambda.format.binary });
-    this.build(options);
+  get functionAndContainers$() {
+    return zip(this.funcSettings$, this.currentContainers$)
+      .pip(map(([[funcName, funcSetting], container]) => ({
+        funcName,
+        funcSetting,
+        container,
+      })));
   }
 
-  startCommand() {
+  async buildBinary() {
+    // before:rust:start:start event
+    const options = this.cargoLambdaOptions({ format: CargoLambda.format.binary });
+    await this.build(options);
+  }
+
+  async startContainers() {
     // rust:start:start event
     // 1. collect settings
     // 2. get current docker container status
-    zip(this.funcSettings$, this.currentContainers$).pipe(
-      // 3. start the container process if it has not started yet.
-      mergeMap(([[funcName, funcSetting], container]) => {
-        const options = {
-          artifact: this.buildArtifactPath(funcName),
-          arch: this.settings.cargoLambda.arch,
-          ...funcSetting,
-        };
+    return zip(this.funcSettings$, this.currentContainers$)
+      .pipe(
+        // 3. start the container process if it has not started yet.
+        mergeMap(([[funcName, funcSetting], container]) => {
+          const options = {
+            artifact: this.buildArtifactPath(funcName),
+            arch: this.settings.cargoLambda.arch,
+            ...funcSetting,
+          };
 
-        return container.start(options);
-      }),
-    ).subscribe(({ message }) => {
-      this.log.info(message);
-    });
+          return container.start(options);
+        }),
+      )
+      // Change observable to promise to let node.js know startCommand as an async function.
+      // And wait starting next afterStartCommand function until this promise resolves.
+      .forEach(({ message }) => {
+        this.log.info(message);
+      });
   }
 
-  afterStartCommand() {
-    // after:rust:start:start event
-    // 1. monitor docker containers
-    this.log.info('after start command called');
-  }
+  showContainerStatus() {
+    const headers = ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'];
 
-  psCommand() {
-    // rust:ps:show event
-    // 1. collect settings
-    // 2. get current docker container status
-    // 3. show outputs
-    this.log.notice(this.settings);
-    this.log.info('ps command called');
+    zip(this.funcSettings$, this.currentContainers$)
+      .pipe(
+        map(([[funcName], container]) => container.format(funcName)),
+        reduce((rows, row) => [...rows, row], [headers]),
+      )
+      .subscribe((rows) => {
+        process.stderr.write('\n');
+        process.stderr.write(table(rows));
+        process.stderr.write('\n');
+      });
   }
 
   beforeInvokeCommand() {

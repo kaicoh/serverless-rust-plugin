@@ -1,8 +1,10 @@
 const cp = require('child_process');
+const net = require('net');
 const { PassThrough } = require('stream');
 const utils = require('../../lib/utils');
 
 jest.mock('child_process');
+jest.mock('net');
 
 describe('spawn', () => {
   let promise;
@@ -56,5 +58,80 @@ describe('spawn', () => {
     expect(await promise).toEqual(expect.objectContaining({
       stderr: 'This is a test.',
     }));
+  });
+});
+
+describe('getFreePort', () => {
+  let server;
+
+  beforeEach(() => {
+    net.createServer = jest.fn(() => server);
+  });
+
+  describe('when success', () => {
+    beforeEach(() => {
+      server = {
+        on: jest.fn(),
+        listen: jest.fn((_, callback) => {
+          callback();
+        }),
+        address: jest.fn(() => ({ port: 9999 })),
+        close: jest.fn(),
+      };
+    });
+
+    it('resolves with a port number which is from server.address function', async () => {
+      const result = await utils.getFreePort();
+      expect(result).toEqual(9999);
+    });
+
+    it('closes the server', async () => {
+      await utils.getFreePort();
+      expect(server.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('when server.address doesn\'t return port', () => {
+    beforeEach(() => {
+      server = {
+        on: jest.fn(),
+        listen: jest.fn((_, callback) => {
+          callback();
+        }),
+        address: jest.fn(() => ({})),
+        close: jest.fn(),
+      };
+    });
+
+    it('rejects with an error', async () => {
+      await expect(() => utils.getFreePort()).rejects.toThrow(/Unable to get the server's given port/);
+    });
+
+    it('closes the server', async () => {
+      await expect(() => utils.getFreePort()).rejects.toThrow();
+      expect(server.close).toHaveBeenCalled();
+    });
+  });
+
+  describe('when server gets an error', () => {
+    beforeEach(() => {
+      server = {
+        on: jest.fn((_, callback) => {
+          callback(new Error('an error'));
+        }),
+        listen: jest.fn(),
+        address: jest.fn(() => ({ port: 9999 })),
+        close: jest.fn(),
+      };
+    });
+
+    it('rejects with an error', async () => {
+      await expect(() => utils.getFreePort()).rejects.toThrow(/an error/);
+    });
+
+    it('closes the server', async () => {
+      await expect(() => utils.getFreePort()).rejects.toThrow();
+      expect(server.close).toHaveBeenCalled();
+    });
   });
 });
