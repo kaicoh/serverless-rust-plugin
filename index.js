@@ -7,7 +7,6 @@ const { spawnSync } = require('child_process');
 const _get = require('lodash.get');
 const {
   from,
-  zip,
   map,
   filter,
   reduce,
@@ -451,49 +450,49 @@ class ServerlessRustPlugin {
     return functions;
   }
 
-  get funcSettings() {
-    const settings = new Map();
+  rustFunction(funcName) {
+    const { service } = this.serverless;
+    const func = service.getFunction(funcName);
 
-    this.rustFunctions.forEach((func, funcName) => {
-      settings.set(funcName, {
+    return {
+      name: funcName,
+      config: {
         containerName: _get(func, ['rust', 'containerName']) || `${this.settings.service}_${funcName}`,
         port: _get(func, ['rust', 'port'], 0),
         envFile: _get(func, ['rust', 'envFile']) || this.settings.local.envFile,
         env: { ...this.settings.environment, ...func.environment },
         dockerArgs: _get(func, ['rust', 'dockerArgs']) || this.settings.local.dockerArgs,
-      });
-    });
-
-    return settings;
+      },
+    };
   }
 
-  get funcSettings$() {
-    return from(this.funcSettings);
+  get rustFunctions$() {
+    const { service } = this.serverless;
+    const bins = this.cargo.binaries();
+
+    return from(service.getAllFunctions())
+      .pipe(
+        filter((funcName) => {
+          const func = service.getFunction(funcName);
+          return bins.some((bin) => bin === func.handler);
+        }),
+        map((funcName) => this.rustFunction(funcName)),
+      );
   }
 
-  get currentContainers$() {
-    return this.funcSettings$.pipe(
-      mergeMap(([, { containerName }]) => Container.get(containerName)),
-    );
-  }
-
-  functionAndContainers$(funcNames) {
-    return zip(this.funcSettings$, this.currentContainers$)
+  rustContainers$(funcNames) {
+    return this.rustFunctions$
       .pipe(
         // MEMO:
         // if funcNames is provided, filter functions. if not, all functions pass.
-        filter(([[funcName]]) => {
+        filter(({ name }) => {
           if (Array.isArray(funcNames)) {
-            return funcNames.some((name) => name === funcName);
+            return funcNames.some((funcName) => name === funcName);
           }
-
           return true;
         }),
-        map(([[funcName, funcSetting], container]) => ({
-          funcName,
-          funcSetting,
-          container,
-        })),
+
+        mergeMap(({ name, config }) => Container.get({ name, config })),
       );
   }
 
@@ -507,14 +506,13 @@ class ServerlessRustPlugin {
     // rust:start:start event
     // 1. collect settings
     // 2. get current docker container status
-    return this.functionAndContainers$(this.options.function)
+    return this.rustContainers$(this.options.function)
       .pipe(
         // 3. start the container process if it has not started yet.
-        mergeMap(({ funcName, funcSetting, container }) => {
+        mergeMap((container) => {
           const options = {
-            artifact: this.buildArtifactPath(funcName),
+            artifact: this.buildArtifactPath(container.funcName),
             arch: this.settings.cargoLambda.arch,
-            ...funcSetting,
           };
 
           return container.start(options);
@@ -530,9 +528,9 @@ class ServerlessRustPlugin {
   showContainerStatus() {
     const headers = ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'];
 
-    return this.functionAndContainers$()
+    return this.rustContainers$()
       .pipe(
-        map(({ funcName, container }) => container.format(funcName)),
+        map((container) => container.format()),
         reduce((rows, row) => [...rows, row], [headers]),
       )
       .subscribe((rows) => {
