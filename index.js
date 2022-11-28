@@ -108,23 +108,6 @@ class ServerlessRustPlugin {
             shortcut: 'd',
             type: 'string',
           },
-          env: {
-            usage: 'String representing an environment variable to set when invoking your function, in the form <name>=<value>. Can be repeated for more than one environment variable.',
-            shortcut: 'e',
-            type: 'multiple',
-          },
-          'env-file': {
-            usage: 'The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service.',
-            type: 'string',
-          },
-          port: {
-            usage: 'The port number docker container exposes to accept request.',
-            type: 'string',
-          },
-          'docker-args': {
-            usage: 'Additional arguments passed to `docker run` command for lambda function container.',
-            type: 'string',
-          },
           stdout: {
             usage: 'The lambda function outputs to stdout. default is stderr',
             type: 'boolean',
@@ -139,49 +122,6 @@ class ServerlessRustPlugin {
             usage: 'The name of the function to stop the docker container. If not given, all the rust function stops',
             shortcut: 'f',
             type: 'multiple',
-          },
-        },
-      },
-      'rust:invoke:local': {
-        usage: 'Invoke lambda function locally according to architecture defined in provider using docker container.',
-        lifecycleEvents: ['invoke'],
-        options: {
-          function: {
-            usage: 'The name of the function in your service that you want to invoke locally. Required.',
-            shortcut: 'f',
-            type: 'string',
-            required: true,
-          },
-          path: {
-            usage: 'The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service.',
-            shortcut: 'p',
-            type: 'string',
-          },
-          data: {
-            usage: 'String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag.',
-            shortcut: 'd',
-            type: 'string',
-          },
-          env: {
-            usage: 'String representing an environment variable to set when invoking your function, in the form <name>=<value>. Can be repeated for more than one environment variable.',
-            shortcut: 'e',
-            type: 'multiple',
-          },
-          'env-file': {
-            usage: 'The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service.',
-            type: 'string',
-          },
-          port: {
-            usage: 'The port number docker container exposes to accept request.',
-            type: 'string',
-          },
-          'docker-args': {
-            usage: 'Additional arguments passed to `docker run` command for lambda function container.',
-            type: 'string',
-          },
-          stdout: {
-            usage: 'The lambda function outputs to stdout. default is stderr',
-            type: 'boolean',
           },
         },
       },
@@ -204,10 +144,6 @@ class ServerlessRustPlugin {
       'after:rust:invoke:execute': this.afterInvokeCommand.bind(this),
 
       'rust:stop:stop': this.stopCommand.bind(this),
-
-      'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
-      'rust:invoke:local:invoke': this.invokeLocal.bind(this),
-      'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
     };
   }
 
@@ -483,28 +419,6 @@ class ServerlessRustPlugin {
     }
   }
 
-  // just a wrapper function needs to stop docker container
-  beforeInvokeLocal() {
-    this.log.info(this.options);
-
-    try {
-      this.buildAndStartDocker();
-    } catch (err) {
-      this.stopDocker({ silent: true });
-      throw err;
-    }
-  }
-
-  // just a wrapper function needs to stop docker container
-  async invokeLocal() {
-    try {
-      await this.requestToDocker();
-    } catch (err) {
-      this.stopDocker({ silent: true });
-      throw err;
-    }
-  }
-
   // MEMO:
   // This plugin recognize rust function whether its handler value satisfies the syntax or not.
   // [[syntax]]
@@ -563,14 +477,14 @@ class ServerlessRustPlugin {
     );
   }
 
-  functionAndContainers$(name) {
+  functionAndContainers$(funcNames) {
     return zip(this.funcSettings$, this.currentContainers$)
       .pipe(
         // MEMO:
-        // if name is provided, filter functions. if not, all functions pass.
-        filter(([funcName]) => {
-          if (typeof name === 'string') {
-            return funcName === name;
+        // if funcNames is provided, filter functions. if not, all functions pass.
+        filter(([[funcName]]) => {
+          if (Array.isArray(funcNames)) {
+            return funcNames.some((name) => name === funcName);
           }
 
           return true;
@@ -593,7 +507,7 @@ class ServerlessRustPlugin {
     // rust:start:start event
     // 1. collect settings
     // 2. get current docker container status
-    return this.functionAndContainers$()
+    return this.functionAndContainers$(this.options.function)
       .pipe(
         // 3. start the container process if it has not started yet.
         mergeMap(({ funcName, funcSetting, container }) => {

@@ -74,9 +74,6 @@ describe('ServerlessRustPlugin', () => {
     const events = [
       'before:package:createDeploymentArtifacts',
       'before:deploy:function:packageFunction',
-      'before:rust:invoke:local:invoke',
-      'rust:invoke:local:invoke',
-      'after:rust:invoke:local:invoke',
     ];
 
     it.each(events)('sets "%s" hook', (event) => {
@@ -195,38 +192,6 @@ describe('ServerlessRustPlugin', () => {
 
         it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
           expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
-        });
-      });
-
-      describe('rust:invoke:local', () => {
-        beforeEach(() => {
-          command = plugin.commands['rust:invoke:local'];
-        });
-
-        it('defines', () => {
-          expect(command).toBeDefined();
-        });
-
-        const lifecycleEvents = ['invoke'];
-
-        it.each(lifecycleEvents)('has lifecycle event "%s"', (event) => {
-          expect(command.lifecycleEvents).toEqual(expect.arrayContaining([event]));
-        });
-
-        const cmdOptions = [
-          ['function', { shortcut: 'f', type: 'string', required: true }],
-          ['path', { shortcut: 'p', type: 'string' }],
-          ['data', { shortcut: 'd', type: 'string' }],
-          ['env', { shortcut: 'e', type: 'multiple' }],
-          ['env-file', { type: 'string' }],
-          ['port', { type: 'string' }],
-          ['docker-args', { type: 'string' }],
-          ['stdout', { type: 'boolean' }],
-        ];
-
-        it.each(cmdOptions)('has option "%s"', (name, definition) => {
-          const option = command.options[name];
-          expect(option).toEqual(expect.objectContaining(definition));
         });
       });
     });
@@ -1111,76 +1076,6 @@ describe('ServerlessRustPlugin', () => {
       it('throws an error if port options is not a number', () => {
         plugin.options.port = 'not a number';
         expect(() => plugin.invokeOptions()).toThrow(/port must be an integer/);
-      });
-    });
-  });
-
-  describe('method: beforeInvokeLocal', () => {
-    describe('when buildAndStartDocker successes', () => {
-      beforeEach(() => {
-        plugin.buildAndStartDocker = jest.fn();
-        plugin.stopDocker = jest.fn();
-      });
-
-      it('calls plugin.buildAndStartDocker', () => {
-        plugin.beforeInvokeLocal();
-        expect(plugin.buildAndStartDocker).toHaveBeenCalled();
-      });
-
-      it('doesn\'t call plugin.stopDocker', () => {
-        plugin.beforeInvokeLocal();
-        expect(plugin.stopDocker).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('when buildAndStartDocker fails', () => {
-      beforeEach(() => {
-        plugin.buildAndStartDocker = jest.fn(() => { throw new Error('some error'); });
-        plugin.stopDocker = jest.fn();
-      });
-
-      it('throws an error thrown by buildAndStartDocker', () => {
-        expect(() => plugin.beforeInvokeLocal()).toThrow(/some error/);
-      });
-
-      it('calls plugin.stopDocker with silent option', () => {
-        expect(() => plugin.beforeInvokeLocal()).toThrow(/some error/);
-        expect(plugin.stopDocker).toHaveBeenCalledWith({ silent: true });
-      });
-    });
-  });
-
-  describe('method: invokeLocal', () => {
-    describe('when requestToDocker resolves', () => {
-      beforeEach(() => {
-        plugin.requestToDocker = jest.fn(() => Promise.resolve());
-        plugin.stopDocker = jest.fn();
-      });
-
-      it('calls plugin.requestToDocker', async () => {
-        await plugin.invokeLocal();
-        expect(plugin.requestToDocker).toHaveBeenCalled();
-      });
-
-      it('doesn\'t call plugin.stopDocker', async () => {
-        await plugin.invokeLocal();
-        expect(plugin.stopDocker).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('when requestToDocker rejects', () => {
-      beforeEach(() => {
-        plugin.requestToDocker = jest.fn(() => Promise.reject(new Error('some error')));
-        plugin.stopDocker = jest.fn();
-      });
-
-      it('throws an error thrown by requestToDocker', async () => {
-        await expect(() => plugin.invokeLocal()).rejects.toThrow(/some error/);
-      });
-
-      it('calls plugin.stopDocker with silent option', async () => {
-        await expect(() => plugin.invokeLocal()).rejects.toThrow(/some error/);
-        expect(plugin.stopDocker).toHaveBeenCalledWith({ silent: true });
       });
     });
   });
