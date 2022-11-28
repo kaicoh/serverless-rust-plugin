@@ -102,10 +102,12 @@ describe('Container', () => {
         },
       };
       const container = new Container(args(state));
-      expect(container.format('func')).toEqual([
+      container.displayStatus = jest.fn(() => 'Decorated status');
+
+      expect(container.format()).toEqual([
         'test',
         'existing sample',
-        'Unhappy',
+        'Decorated status',
         '0.0.0.0:8000 -> 8080/tcp, 127.0.0.1:9000 -> 8080/tcp, 1.1.1.1:3000 -> 5000/tcp',
       ]);
     });

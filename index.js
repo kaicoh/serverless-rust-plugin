@@ -143,6 +143,7 @@ class ServerlessRustPlugin {
       'after:rust:invoke:execute': this.afterInvokeCommand.bind(this),
 
       'rust:stop:stop': this.stopCommand.bind(this),
+      'after:rust:stop:stop': this.showContainerStatus.bind(this),
     };
   }
 
@@ -567,12 +568,13 @@ class ServerlessRustPlugin {
   }
 
   stopCommand() {
-    // rust:stop:stop event
-    // 1. collect settings
-    // 2. get current docker container status
-    // 3. determine which containers to stop
-    // 4. stop the containers
-    this.log.info('stop command called');
+    return this.rustContainers$(this.options.function)
+      .pipe(
+        mergeMap((container) => container.stop()),
+      )
+      .forEach(({ message }) => {
+        this.log.info(message);
+      });
   }
 }
 
