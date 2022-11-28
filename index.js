@@ -9,6 +9,7 @@ const {
   from,
   zip,
   map,
+  filter,
   reduce,
   mergeMap,
 } = require('rxjs');
@@ -562,13 +563,24 @@ class ServerlessRustPlugin {
     );
   }
 
-  get functionAndContainers$() {
+  functionAndContainers$(name) {
     return zip(this.funcSettings$, this.currentContainers$)
-      .pip(map(([[funcName, funcSetting], container]) => ({
-        funcName,
-        funcSetting,
-        container,
-      })));
+      .pipe(
+        // MEMO:
+        // if name is provided, filter functions. if not, all functions pass.
+        filter(([funcName]) => {
+          if (typeof name === 'string') {
+            return funcName === name;
+          }
+
+          return true;
+        }),
+        map(([[funcName, funcSetting], container]) => ({
+          funcName,
+          funcSetting,
+          container,
+        })),
+      );
   }
 
   async buildBinary() {
@@ -581,10 +593,10 @@ class ServerlessRustPlugin {
     // rust:start:start event
     // 1. collect settings
     // 2. get current docker container status
-    return zip(this.funcSettings$, this.currentContainers$)
+    return this.functionAndContainers$()
       .pipe(
         // 3. start the container process if it has not started yet.
-        mergeMap(([[funcName, funcSetting], container]) => {
+        mergeMap(({ funcName, funcSetting, container }) => {
           const options = {
             artifact: this.buildArtifactPath(funcName),
             arch: this.settings.cargoLambda.arch,
@@ -595,7 +607,7 @@ class ServerlessRustPlugin {
         }),
       )
       // Change observable to promise to let node.js know startCommand as an async function.
-      // And wait starting next afterStartCommand function until this promise resolves.
+      // And wait starting next after:rust:start:start hook until this promise resolves.
       .forEach(({ message }) => {
         this.log.info(message);
       });
@@ -604,9 +616,9 @@ class ServerlessRustPlugin {
   showContainerStatus() {
     const headers = ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'];
 
-    zip(this.funcSettings$, this.currentContainers$)
+    return this.functionAndContainers$()
       .pipe(
-        map(([[funcName], container]) => container.format(funcName)),
+        map(({ funcName, container }) => container.format(funcName)),
         reduce((rows, row) => [...rows, row], [headers]),
       )
       .subscribe((rows) => {
