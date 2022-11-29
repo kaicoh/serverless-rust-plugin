@@ -1,6 +1,6 @@
 const { PassThrough } = require('stream');
 const http = require('http');
-const { invokeLambda } = require('../../lib/request');
+const { invoke } = require('../../lib/lambda');
 
 jest.mock('http');
 
@@ -43,13 +43,13 @@ describe('invokeLambda', () => {
   });
 
   it('rejects when response stream emits an error', async () => {
-    promise = invokeLambda(options);
+    promise = invoke(options);
     resStream.emit('error', new Error('some error'));
     await expect(() => promise).rejects.toThrow(/some error/);
   });
 
   it('outputs to stderr if option.stdout is false', async () => {
-    promise = invokeLambda(options);
+    promise = invoke(options);
     resStream.emit('end');
     await promise;
 
@@ -58,7 +58,7 @@ describe('invokeLambda', () => {
 
   it('outputs to stdout when option.stdout is true', async () => {
     options.stdout = true;
-    promise = invokeLambda(options);
+    promise = invoke(options);
     resStream.emit('end');
     await promise;
 
@@ -67,7 +67,7 @@ describe('invokeLambda', () => {
 
   describe('when http request seccesses', () => {
     beforeEach(() => {
-      promise = invokeLambda(options);
+      promise = invoke(options);
       resStream.emit('end');
     });
 
@@ -120,7 +120,7 @@ describe('invokeLambda', () => {
       };
 
       http.request = () => errRequest;
-      await expect(() => invokeLambda(options)).rejects.toThrow(/broken request/);
+      await expect(() => invoke(options)).rejects.toThrow(/broken request/);
 
       expect(errRequest.on).toHaveBeenCalledTimes(4);
     });

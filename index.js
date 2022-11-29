@@ -14,7 +14,7 @@ const { table } = require('table');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
-const request = require('./lib/request');
+const lambda = require('./lib/lambda');
 const {
   hasSpawnError,
   mkdirSyncIfNotExist,
@@ -268,7 +268,7 @@ class ServerlessRustPlugin {
           artifacts.getAll().forEach(({ path: artifactPath }) => {
             this.log.info(`build artifact: ${artifactPath}`);
           });
-        })
+        }),
       );
   }
 
@@ -285,7 +285,7 @@ class ServerlessRustPlugin {
         mergeMap(() => this.modifyFunctions$(options)),
       )
       .forEach(() => {
-        this.log.success('Complete building rust functions');
+        this.log.info('Complete building rust function');
       });
   }
 
@@ -343,9 +343,6 @@ class ServerlessRustPlugin {
   //
   //   nonRustFunc:
   //     handler: non-of-the-above
-  // Return Map<string, object>
-  //   key: function name
-  //   value: function configuration object
   get rustFunctions$() {
     const { service } = this.serverless;
     const bins = this.cargo.binaries();
@@ -410,8 +407,8 @@ class ServerlessRustPlugin {
       )
       // Change observable to promise to let node.js know startCommand as an async function.
       // And wait starting next after:rust:start:start hook until this promise resolves.
-      .forEach(() => {
-        this.log.info('The all containers have started');
+      .forEach((container) => {
+        this.log.info(`The container "${container.name}" has started`);
       });
   }
 
@@ -420,7 +417,7 @@ class ServerlessRustPlugin {
 
     this.rustContainers$()
       .pipe(
-        map((container) => container.format()),
+        map(Container.tableRow),
         reduce((rows, row) => [...rows, row], [headers]),
       )
       .subscribe((rows) => {
@@ -461,11 +458,11 @@ class ServerlessRustPlugin {
           const [port] = container.hostPortsTo(8080);
 
           if (!port) {
-            this.log.error(container.show());
+            this.log.error(container.format());
             throw this.error('Cannot get host port binding to 8080/tcp');
           }
 
-          return request.invokeLambda({ ...options, port });
+          return lambda.invoke({ ...options, port });
         }),
       )
       // Change to promise to wait starting next hook event.
@@ -489,8 +486,8 @@ class ServerlessRustPlugin {
 
         mergeMap((container) => container.stop()),
       )
-      .forEach(() => {
-        this.log.info('The all containers have stopped');
+      .forEach((container) => {
+        this.log.info(`The container ${container.name} has stopped`);
       });
   }
 }
