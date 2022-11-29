@@ -1,10 +1,12 @@
 const cp = require('child_process');
 const net = require('net');
+const fs = require('fs');
 const { PassThrough } = require('stream');
 const utils = require('../../lib/utils');
 
 jest.mock('child_process');
 jest.mock('net');
+jest.mock('fs');
 
 describe('spawn', () => {
   let promise;
@@ -12,11 +14,8 @@ describe('spawn', () => {
 
   beforeEach(() => {
     child = new PassThrough();
-    child.stdout = new PassThrough();
-    child.stderr = new PassThrough();
 
-    cp.spawn = jest.fn(() => child);
-
+    cp.spawn = jest.fn().mockImplementation(() => child);
     promise = utils.spawn('cmd', ['arg0', 'arg1'], { foo: 'bar' });
   });
 
@@ -33,12 +32,26 @@ describe('spawn', () => {
     }));
   });
 
-  it('rejects when child process emits an error', () => {
-    const subject = () => { child.emit('error', new Error('some error')); };
-    expect(subject).toThrow(/some error/);
+  it('resolves with error if child process invokes error callback', async () => {
+    const error = { foo: 'bar' };
+
+    child.on = jest.fn()
+      .mockImplementationOnce((_, callback) => { callback(error); })
+      .mockImplementation((_, callback) => { callback(1); });
+
+    const subject = () => utils.spawn('cmd', ['arg0', 'arg1'], { foo: 'bar' });
+
+    expect(await subject()).toEqual(expect.objectContaining({
+      code: 1,
+      error,
+    }));
   });
 
   it('collects data emitted to stdout and returns it', async () => {
+    child.stdout = new PassThrough();
+
+    promise = utils.spawn('cmd', ['arg0', 'arg1'], { foo: 'bar' });
+
     child.stdout.emit('data', 'This i');
     child.stdout.emit('data', 's a');
     child.stdout.emit('data', ' test.');
@@ -50,6 +63,10 @@ describe('spawn', () => {
   });
 
   it('collects data emitted to stderr and returns it', async () => {
+    child.stderr = new PassThrough();
+
+    promise = utils.spawn('cmd', ['arg0', 'arg1'], { foo: 'bar' });
+
     child.stderr.emit('data', 'This i');
     child.stderr.emit('data', 's a');
     child.stderr.emit('data', ' test.');
@@ -58,6 +75,122 @@ describe('spawn', () => {
     expect(await promise).toEqual(expect.objectContaining({
       stderr: 'This is a test.',
     }));
+  });
+});
+
+describe('hasSpawnError', () => {
+  it('returns true if the argument\'s error property exists', () => {
+    expect(utils.hasSpawnError({ error: {} })).toBe(true);
+  });
+
+  it('returns true if the argument\'s code property is larger than 0', () => {
+    expect(utils.hasSpawnError({ code: 1 })).toBe(true);
+  });
+
+  it('returns false if the argument is neither of the above 2', () => {
+    expect(utils.hasSpawnError({ code: 0 })).toBe(false);
+  });
+});
+
+describe('mkdirSyncIfNotExist', () => {
+  beforeEach(() => {
+    fs.mkdirSync = jest.fn();
+  });
+
+  describe('if the given directory doesn\'t exist', () => {
+    beforeEach(() => {
+      fs.existsSync = jest.fn(() => false);
+      utils.mkdirSyncIfNotExist('some dir');
+    });
+
+    it('calls fs.mkdirSync', () => {
+      expect(fs.mkdirSync).toHaveBeenCalledWith('some dir', { recursive: true });
+    });
+  });
+
+  describe('if the given directory exists', () => {
+    beforeEach(() => {
+      fs.existsSync = jest.fn(() => true);
+      utils.mkdirSyncIfNotExist('some dir');
+    });
+
+    it('doesn\'t call fs.mkdirSync', () => {
+      expect(fs.mkdirSync).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('readFileSyncIfExist', () => {
+  let result;
+
+  beforeEach(() => {
+    fs.readFileSync = jest.fn(() => 'contents in a file');
+  });
+
+  describe('if the given file doesn\'t exist', () => {
+    beforeEach(() => {
+      fs.existsSync = jest.fn(() => false);
+      result = utils.readFileSyncIfExist('a file');
+    });
+
+    it('returns undefined', () => {
+      expect(result).toBeUndefined();
+    });
+
+    it('doesn\'t call fs.readFileSync', () => {
+      expect(fs.readFileSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('if the given file exists', () => {
+    beforeEach(() => {
+      fs.existsSync = jest.fn(() => true);
+      result = utils.readFileSyncIfExist('a file');
+    });
+
+    it('returns what fs.readFileSync returns', () => {
+      expect(result).toEqual('contents in a file');
+    });
+
+    it('calls fs.readFileSync', () => {
+      expect(fs.readFileSync).toHaveBeenCalledWith('a file', 'utf8');
+    });
+  });
+});
+
+describe('copyFile', () => {
+  let stream;
+
+  beforeEach(() => {
+    stream = {
+      on: jest.fn()
+        .mockImplementationOnce(() => {})
+        .mockImplementation((_, callback) => { callback(); }),
+    };
+
+    fs.createReadStream = jest.fn(() => ({
+      pipe: jest.fn(() => stream),
+    }));
+    fs.createwriteStream = jest.fn(() => 'writable stream');
+  });
+
+  it('copys from src to dist', async () => {
+    await utils.copyFile('src file', 'dist file');
+    expect(fs.createReadStream).toHaveBeenCalledWith('src file');
+    expect(fs.createWriteStream).toHaveBeenCalledWith('dist file');
+  });
+
+  it('returns a promise resolves when copying succeeds', async () => {
+    await expect(utils.copyFile('src', 'dist')).resolves.toBeUndefined();
+  });
+
+  it('returns a promise rejects when copying fails', async () => {
+    const error = { foo: 'bar' };
+    stream = {
+      on: jest.fn()
+        .mockImplementation((_, callback) => { callback(error); }),
+    };
+    await expect(utils.copyFile('src', 'dist')).rejects.toEqual(error);
   });
 });
 
@@ -133,5 +266,32 @@ describe('getFreePort', () => {
       await expect(() => utils.getFreePort()).rejects.toThrow();
       expect(server.close).toHaveBeenCalled();
     });
+  });
+});
+
+describe('color', () => {
+  const table = [
+    ['black', 30],
+    ['red', 31],
+    ['green', 32],
+    ['yellow', 33],
+    ['blue', 34],
+    ['magenta', 35],
+    ['cyan', 36],
+    ['white', 37],
+  ];
+
+  const expected = (num) => `\u001b[${num}mMessage\u001b[39m`;
+
+  it.each(table)('returns the decorated message when color.%s is called', (color, num) => {
+    expect(utils.color[color]('Message')).toEqual(expected(num));
+  });
+
+  it.each(table)('returns an empty message when when color.%s is called with an falsy object', (color) => {
+    expect(utils.color[color]()).toEqual('');
+  });
+
+  it('doesn\'t decorate message when color.default is called', () => {
+    expect(utils.color.default('Message')).toEqual('Message');
   });
 });

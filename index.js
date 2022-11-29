@@ -293,7 +293,7 @@ class ServerlessRustPlugin {
     return new this.serverless.classes.Error(message);
   }
 
-  readJsonFile() {
+  jsonFromPathOption() {
     if (!this.options.path) {
       return {};
     }
@@ -433,7 +433,7 @@ class ServerlessRustPlugin {
       retryInterval: 1000,
       stdout: this.options.stdout || false,
       data: {
-        ...this.readJsonFile(),
+        ...this.jsonFromPathOption(),
         ...this.strToJSON(this.options.data || '{}'),
       },
     };
