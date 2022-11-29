@@ -1,8 +1,10 @@
 const { PassThrough } = require('stream');
+const http = require('http');
 const { invokeLambda } = require('../../lib/request');
 
+jest.mock('http');
+
 describe('invokeLambda', () => {
-  let request;
   let options;
   let reqStream;
   let resStream;
@@ -28,7 +30,7 @@ describe('invokeLambda', () => {
     resStream.headers = { 'content-type': 'application/json' };
     resStream.pipe = jest.fn();
 
-    request = jest.fn((_, callback) => {
+    http.request = jest.fn((_, callback) => {
       callback(resStream);
       return reqStream;
     });
@@ -41,13 +43,13 @@ describe('invokeLambda', () => {
   });
 
   it('rejects when response stream emits an error', async () => {
-    promise = invokeLambda(request, options);
+    promise = invokeLambda(options);
     resStream.emit('error', new Error('some error'));
     await expect(() => promise).rejects.toThrow(/some error/);
   });
 
   it('outputs to stderr if option.stdout is false', async () => {
-    promise = invokeLambda(request, options);
+    promise = invokeLambda(options);
     resStream.emit('end');
     await promise;
 
@@ -56,7 +58,7 @@ describe('invokeLambda', () => {
 
   it('outputs to stdout when option.stdout is true', async () => {
     options.stdout = true;
-    promise = invokeLambda(request, options);
+    promise = invokeLambda(options);
     resStream.emit('end');
     await promise;
 
@@ -65,12 +67,12 @@ describe('invokeLambda', () => {
 
   describe('when http request seccesses', () => {
     beforeEach(() => {
-      promise = invokeLambda(request, options);
+      promise = invokeLambda(options);
       resStream.emit('end');
     });
 
     it('calls http.request with correct options', () => {
-      const arg = request.mock.lastCall[0];
+      const arg = http.request.mock.lastCall[0];
       const expected = expect.objectContaining({
         hostname: 'localhost',
         port: options.port,
@@ -117,8 +119,8 @@ describe('invokeLambda', () => {
         end: jest.fn(),
       };
 
-      request = () => errRequest;
-      await expect(() => invokeLambda(request, options)).rejects.toThrow(/broken request/);
+      http.request = () => errRequest;
+      await expect(() => invokeLambda(options)).rejects.toThrow(/broken request/);
 
       expect(errRequest.on).toHaveBeenCalledTimes(4);
     });
