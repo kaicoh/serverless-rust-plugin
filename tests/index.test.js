@@ -1,14 +1,17 @@
 const path = require('path');
-const fs = require('fs');
 const { reduce, of } = require('rxjs');
+const Table = require('table');
 const ServerlessRustPlugin = require('..');
 const Cargo = require('../lib/cargo');
 const CargoLambda = require('../lib/cargolambda');
+const Container = require('../lib/container');
 const lambda = require('../lib/lambda');
 const mockUtils = require('../lib/utils');
 
+jest.mock('table');
 jest.mock('../lib/cargo');
 jest.mock('../lib/cargolambda');
+jest.mock('../lib/container');
 jest.mock('../lib/lambda');
 jest.mock('../lib/utils');
 
@@ -56,6 +59,7 @@ describe('ServerlessRustPlugin', () => {
         info: jest.fn(),
         success: jest.fn(),
         notice: jest.fn(),
+        error: jest.fn(),
       },
     };
 
@@ -196,6 +200,7 @@ describe('ServerlessRustPlugin', () => {
   });
 
   describe('method: initialize', () => {
+    let mock;
     /*
      * Suppose there are 2 rust functions in serverless.yml
      *
@@ -218,13 +223,17 @@ describe('ServerlessRustPlugin', () => {
         .mockImplementationOnce(() => ({ handler: 'unit-test.bin1' }))
         .mockImplementation(() => ({ handler: 'non-rust-func' }));
 
-      jest.spyOn(plugin, 'rustFunctions$', 'get')
+      mock = jest.spyOn(plugin, 'rustFunctions$', 'get')
         .mockReturnValue({
           forEach: jest.fn((callback) => {
             rustFunctions.forEach((f) => callback(f));
             return Promise.resolve({});
           }),
         });
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
     });
 
     it('resolves with what plugin.rustFunctions$.forEach returns', async () => {
@@ -456,6 +465,7 @@ describe('ServerlessRustPlugin', () => {
 
   describe('getter: rustFunctions$', () => {
     let result;
+    let mock;
 
     beforeEach(() => {
       // Suppose there are 2 binary definitions in Cargo.toml
@@ -507,9 +517,13 @@ describe('ServerlessRustPlugin', () => {
         });
 
       plugin = new ServerlessRustPlugin(serverless, options, utils);
-      jest.spyOn(plugin, 'rustFunction');
+      mock = jest.spyOn(plugin, 'rustFunction');
 
       result = plugin.rustFunctions$;
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
     });
 
     it('returns an Observable includes only rust functions', (done) => {
@@ -547,6 +561,8 @@ describe('ServerlessRustPlugin', () => {
     let rustFunc0;
     let rustFunc1;
 
+    let mock;
+
     beforeEach(() => {
       // Suppose following
       // serverless.yml
@@ -566,7 +582,7 @@ describe('ServerlessRustPlugin', () => {
       rustFunc0 = { handler: 'unit-test.bin0', package: { foo: 'bar' } };
       rustFunc1 = { handler: 'unit-test.bin1' };
 
-      jest.spyOn(plugin, 'rustFunctions$', 'get').mockReturnValue(
+      mock = jest.spyOn(plugin, 'rustFunctions$', 'get').mockReturnValue(
         of({ name: 'rustFunc0' }, { name: 'rustFunc1' }),
       );
 
@@ -583,6 +599,10 @@ describe('ServerlessRustPlugin', () => {
               return {};
           }
         });
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
     });
 
     describe('with "zip" option', () => {
@@ -741,6 +761,7 @@ describe('ServerlessRustPlugin', () => {
     let buildOptions;
     let buildOutput;
     let artifacts;
+    let mock;
 
     beforeEach(() => {
       buildOptions = {};
@@ -756,11 +777,15 @@ describe('ServerlessRustPlugin', () => {
       CargoLambda.build = jest.fn(() => Promise.resolve(buildOutput));
       mockUtils.hasSpawnError = jest.fn(() => false);
 
-      jest.spyOn(plugin, 'rustFunctions$', 'get').mockReturnValue(
+      mock = jest.spyOn(plugin, 'rustFunctions$', 'get').mockReturnValue(
         of({ name: 'rustFunc0' }, { name: 'rustFunc1' }),
       );
 
       plugin.getRustFunctions = jest.fn(() => ['func0', 'func1']);
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
     });
 
     it('throws an error if provider is not aws', () => {
@@ -849,6 +874,563 @@ describe('ServerlessRustPlugin', () => {
       expect(plugin.modifyFunctions$).toHaveBeenCalledWith(
         expect.objectContaining(buildOptions),
       );
+    });
+  });
+
+  describe('method: jsonFromPathOption', () => {
+    beforeEach(() => {
+      options.path = 'some/path';
+      mockUtils.readFileSyncIfExist = jest.fn(() => '{"foo":"bar"}');
+    });
+
+    it('returns an empty object if the options.path is undefined', () => {
+      options.path = undefined;
+      expect(plugin.jsonFromPathOption()).toEqual({});
+    });
+
+    it('throws an error if file doesn\'t exist', () => {
+      mockUtils.readFileSyncIfExist = jest.fn();
+      expect(() => plugin.jsonFromPathOption()).toThrow(/File does not exist/);
+    });
+
+    it('reads file using options.path', () => {
+      plugin.jsonFromPathOption();
+
+      const expectedPath = path.resolve(plugin.srcPath, options.path);
+      expect(mockUtils.readFileSyncIfExist).toHaveBeenCalledWith(expectedPath);
+    });
+
+    it('returns an object parse from the file', () => {
+      expect(plugin.jsonFromPathOption()).toEqual({ foo: 'bar' });
+    });
+
+    it('throws an error if the file content is not a valid json', () => {
+      mockUtils.readFileSyncIfExist = jest.fn(() => '{foo:"bar"}');
+      expect(() => plugin.jsonFromPathOption()).toThrow(/Cannot parse to JSON/);
+    });
+  });
+
+  describe('method: rustFunction', () => {
+    let rustFunc;
+    let mock;
+
+    beforeEach(() => {
+      rustFunc = {
+        rust: {},
+      };
+
+      mock = jest.spyOn(plugin, 'config', 'get').mockReturnValue({
+        service: 'unit-test',
+        environment: { var1: 'VAL1', var2: 'VAL2' },
+        local: {
+          envFile: 'localenv',
+          dockerArgs: '--some args',
+        },
+      });
+
+      plugin.getFunction = jest.fn(() => rustFunc);
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
+    });
+
+    describe('returns an object with "name" property', () => {
+      it('is from given function name', () => {
+        expect(plugin.rustFunction('func0')).toEqual(expect.objectContaining({
+          name: 'func0',
+        }));
+      });
+    });
+
+    describe('returns an object with "config.containerName" property', () => {
+      it('is from each function configuration', () => {
+        rustFunc.rust.containerName = 'func0Container';
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          containerName: 'func0Container',
+        }));
+      });
+
+      it('is from service name if function configuration is undefined', () => {
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          containerName: 'unit-test_func0',
+        }));
+      });
+    });
+
+    describe('returns an object with "config.port" property', () => {
+      it('is from each function configuration', () => {
+        rustFunc.rust.port = '8000';
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          port: 8000,
+        }));
+      });
+
+      it('throws an error if it is not a number in configuration', () => {
+        rustFunc.rust.port = 'foobar';
+        expect(() => plugin.rustFunction('func0')).toThrow(/port number must be an integer/);
+      });
+
+      it('is 0 if function configuration is undefined', () => {
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          port: 0,
+        }));
+      });
+    });
+
+    describe('returns an object with "config.envFile" property', () => {
+      it('is from each function configuration', () => {
+        rustFunc.rust.envFile = 'funcEnv';
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          envFile: 'funcEnv',
+        }));
+      });
+
+      it('is from global configuration if function configuration is undefined', () => {
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          envFile: 'localenv',
+        }));
+      });
+    });
+
+    describe('returns an object with "config.env" property', () => {
+      it('is what is merged from each function and glocal configuration', () => {
+        rustFunc.environment = { var1: 'FOO' };
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          env: {
+            var1: 'FOO',
+            var2: 'VAL2',
+          },
+        }));
+      });
+    });
+
+    describe('returns an object with "config.dockerArgs" property', () => {
+      it('is from each function configuration', () => {
+        rustFunc.rust.dockerArgs = '--local config';
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          dockerArgs: '--local config',
+        }));
+      });
+
+      it('is from global configuration if function configuration is undefined', () => {
+        expect(plugin.rustFunction('func0').config).toEqual(expect.objectContaining({
+          dockerArgs: '--some args',
+        }));
+      });
+    });
+  });
+
+  describe('method: rustContainers$', () => {
+    let observable;
+    let mock;
+
+    beforeEach(() => {
+      mock = jest.spyOn(plugin, 'rustFunctions$', 'get').mockReturnValue(
+        of({
+          name: 'rustFunc0',
+          config: { foo: 'bar0' },
+        }, {
+          name: 'rustFunc1',
+          config: { foo: 'bar1' },
+        }, {
+          name: 'rustFunc2',
+          config: { foo: 'bar2' },
+        }),
+      );
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
+    });
+
+    describe('when given an array of string', () => {
+      let container0;
+      let container1;
+
+      beforeEach(() => {
+        container0 = {};
+        container1 = {};
+
+        Container.get = jest.fn()
+          .mockImplementationOnce(() => Promise.resolve(container0))
+          .mockImplementationOnce(() => Promise.resolve(container1))
+          .mockImplementation(() => Promise.resolve('nothing'));
+
+        observable = plugin
+          .rustContainers$(['rustFunc0', 'rustFunc2'])
+          .pipe(reduce((acc, con) => [...acc, con], []));
+      });
+
+      it('streams the containers from given function names', (done) => {
+        observable.subscribe((containers) => {
+          expect(containers).toHaveLength(2);
+
+          expect(containers.sort()).toEqual(expect.arrayContaining([
+            container0,
+            container1,
+          ]));
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc0',
+            config: { foo: 'bar0' },
+          });
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc2',
+            config: { foo: 'bar2' },
+          });
+
+          expect(Container.get).not.toHaveBeenCalledWith({
+            name: 'rustFunc1',
+            config: { foo: 'bar1' },
+          });
+
+          done();
+        });
+      });
+    });
+
+    describe('when given a string', () => {
+      let container0;
+
+      beforeEach(() => {
+        container0 = {};
+
+        Container.get = jest.fn()
+          .mockImplementationOnce(() => Promise.resolve(container0))
+          .mockImplementation(() => Promise.resolve('nothing'));
+
+        observable = plugin
+          .rustContainers$('rustFunc1')
+          .pipe(reduce((acc, con) => [...acc, con], []));
+      });
+
+      it('streams the container from given function name', (done) => {
+        observable.subscribe((containers) => {
+          expect(containers).toHaveLength(1);
+
+          expect(containers).toEqual(expect.arrayContaining([
+            container0,
+          ]));
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc1',
+            config: { foo: 'bar1' },
+          });
+
+          expect(Container.get).not.toHaveBeenCalledWith({
+            name: 'rustFunc0',
+            config: { foo: 'bar0' },
+          });
+
+          expect(Container.get).not.toHaveBeenCalledWith({
+            name: 'rustFunc2',
+            config: { foo: 'bar2' },
+          });
+
+          done();
+        });
+      });
+    });
+
+    describe('when given nothing', () => {
+      let container0;
+      let container1;
+      let container2;
+
+      beforeEach(() => {
+        container0 = {};
+        container1 = {};
+        container2 = {};
+
+        Container.get = jest.fn()
+          .mockImplementationOnce(() => Promise.resolve(container0))
+          .mockImplementationOnce(() => Promise.resolve(container1))
+          .mockImplementationOnce(() => Promise.resolve(container2))
+          .mockImplementation(() => Promise.resolve('nothing'));
+
+        observable = plugin
+          .rustContainers$()
+          .pipe(reduce((acc, con) => [...acc, con], []));
+      });
+
+      it('streams the containers from all functions', (done) => {
+        observable.subscribe((containers) => {
+          expect(containers).toHaveLength(3);
+
+          expect(containers.sort()).toEqual(expect.arrayContaining([
+            container0,
+            container1,
+            container2,
+          ]));
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc0',
+            config: { foo: 'bar0' },
+          });
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc1',
+            config: { foo: 'bar1' },
+          });
+
+          expect(Container.get).toHaveBeenCalledWith({
+            name: 'rustFunc2',
+            config: { foo: 'bar2' },
+          });
+
+          done();
+        });
+      });
+    });
+  });
+
+  describe('method: buildBinary', () => {
+    // An instance of mocked CargoLambda class
+    let buildOptions;
+
+    beforeEach(async () => {
+      buildOptions = {};
+
+      CargoLambda.format.binary = 'binary';
+
+      plugin.buildOptions = jest.fn(() => buildOptions);
+      plugin.build$ = jest.fn(() => of({}));
+
+      await plugin.buildBinary();
+    });
+
+    it('calls build$ with binary format option', async () => {
+      expect(plugin.buildOptions).toHaveBeenCalledWith({ format: 'binary' });
+      expect(plugin.build$).toHaveBeenCalledWith(buildOptions);
+    });
+  });
+
+  describe('method: startContainer', () => {
+    let container;
+    let output;
+    let mock;
+
+    beforeEach(() => {
+      output = {};
+
+      container = {
+        funcName: 'rustFunc',
+        start: jest.fn(() => Promise.resolve(output)),
+      };
+
+      mock = jest.spyOn(plugin, 'config', 'get').mockReturnValue({
+        cargoLambda: { arch: 'architecture' },
+      });
+      plugin.buildArtifactPath = jest.fn(() => 'artifact/path');
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
+    });
+
+    it('returns a promise resolves with what container.start returns', async () => {
+      const result = await plugin.startContainer(container);
+      expect(result).toEqual(output);
+    });
+
+    it('passes artifact path and architecture to container.start', async () => {
+      await plugin.startContainer(container);
+      expect(container.start).toHaveBeenCalledWith({
+        artifact: 'artifact/path',
+        arch: 'architecture',
+      });
+    });
+  });
+
+  describe('method: startContainers', () => {
+    let container0;
+    let container1;
+
+    beforeEach(async () => {
+      options = { function: 'rustFunc' };
+
+      container0 = { name: 'container0' };
+      container1 = { name: 'container1' };
+
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+      plugin.rustContainers$ = jest.fn(() => of(container0, container1));
+      plugin.startContainer = jest.fn((val) => Promise.resolve(val));
+
+      await plugin.startContainers();
+    });
+
+    it('calls plugin.rustContainers$ with options.function', () => {
+      expect(plugin.rustContainers$).toHaveBeenCalledWith('rustFunc');
+    });
+
+    it('passes rust function container to plugin.startContainer', () => {
+      expect(plugin.startContainer).toHaveBeenCalledTimes(2);
+      expect(plugin.startContainer.mock.calls[0][0]).toEqual(container0);
+      expect(plugin.startContainer.mock.calls[1][0]).toEqual(container1);
+    });
+  });
+
+  describe('method: showContainerStatus', () => {
+    let container0;
+    let container1;
+    let mock;
+
+    beforeEach(() => {
+      container0 = { name: 'container0' };
+      container1 = { name: 'container1' };
+
+      plugin.rustContainers$ = jest.fn(() => of(container0, container1));
+
+      Container.tableRow = jest.fn()
+        .mockImplementationOnce(() => ['rustFunc0', 'container0', 'running', 'port8000'])
+        .mockImplementationOnce(() => ['rustFunc1', 'container1', 'stopped', 'port0'])
+        .mockImplementation(() => {});
+
+      Table.table = jest.fn(() => 'table');
+
+      mock = jest.spyOn(process.stderr, 'write');
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
+    });
+
+    it('calls Table.table from container status', (done) => {
+      plugin.showContainerStatus().add(() => {
+        expect(Table.table).toHaveBeenCalledWith([
+          ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'],
+          ['rustFunc0', 'container0', 'running', 'port8000'],
+          ['rustFunc1', 'container1', 'stopped', 'port0'],
+        ]);
+
+        done();
+      });
+    });
+  });
+
+  describe('method: invokeFunction', () => {
+    let container;
+    let mock;
+
+    beforeEach(() => {
+      options = { function: 'rustFunc' };
+      container = {
+        name: 'rust container',
+        isRunning: true,
+        hostPortsTo: jest.fn(() => [1234]),
+        format: jest.fn(),
+      };
+
+      mock = jest.spyOn(process.stderr, 'write');
+
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+      plugin.rustContainers$ = jest.fn(() => of(container));
+      plugin.startContainer = jest.fn((val) => Promise.resolve(val));
+
+      lambda.invoke = jest.fn(() => Promise.resolve());
+    });
+
+    afterEach(() => {
+      mock.mockRestore();
+    });
+
+    it('calls lambda.invoke with host port binding to container\'s 8080 port', async () => {
+      await plugin.invokeFunction();
+      expect(lambda.invoke).toHaveBeenCalledWith(expect.objectContaining({
+        port: 1234,
+      }));
+    });
+
+    it('gets host port from container.hostPortsTo', async () => {
+      await plugin.invokeFunction();
+      expect(container.hostPortsTo).toHaveBeenCalledWith(8080);
+    });
+
+    it('throws an error when  container.hostPortsTo doesn\'t return port number', async () => {
+      container.hostPortsTo = jest.fn(() => []);
+      await expect(() => plugin.invokeFunction()).rejects.toThrow(/Cannot get host port binding to 8080\/tcp/);
+    });
+
+    it('calls lambda.invoke with stdout option if it is given', async () => {
+      options.stdout = true;
+
+      await plugin.invokeFunction();
+      expect(lambda.invoke).toHaveBeenCalledWith(expect.objectContaining({
+        stdout: true,
+      }));
+    });
+
+    it('calls lambda.invoke with data from path and data options', async () => {
+      options.data = '{"foo":"bar"}';
+      plugin.jsonFromPathOption = jest.fn(() => ({ foo: 'baz', foobar: 'baz' }));
+
+      await plugin.invokeFunction();
+      expect(lambda.invoke).toHaveBeenCalledWith(expect.objectContaining({
+        data: {
+          foo: 'bar',
+          foobar: 'baz',
+        },
+      }));
+    });
+
+    it('doesn\'t push container name to containersToStop if the container is running', async () => {
+      await plugin.invokeFunction();
+      expect(plugin.containersToStop).toHaveLength(0);
+    });
+
+    it('pushes container name to containersToStop if the container is not running', async () => {
+      container.isRunning = false;
+      await plugin.invokeFunction();
+      expect(plugin.containersToStop).toEqual(['rust container']);
+    });
+
+    it('calls plugin.rustContainers$ with options.function', async () => {
+      await plugin.invokeFunction();
+      expect(plugin.rustContainers$).toHaveBeenCalledWith('rustFunc');
+    });
+  });
+
+  describe('method: stopContainers', () => {
+    let container0;
+    let container1;
+
+    beforeEach(() => {
+      options = { function: 'rustFunc' };
+
+      container0 = {
+        name: 'container0',
+        stop: jest.fn(() => Promise.resolve(container0)),
+      };
+      container1 = {
+        name: 'container1',
+        stop: jest.fn(() => Promise.resolve(container1)),
+      };
+
+      plugin = new ServerlessRustPlugin(serverless, options, utils);
+
+      plugin.rustContainers$ = jest.fn(() => of(container0, container1));
+    });
+
+    it('stops all containers when plugin.containersToStop is undefined', async () => {
+      await plugin.stopContainers();
+      expect(container0.stop).toHaveBeenCalled();
+      expect(container1.stop).toHaveBeenCalled();
+    });
+
+    it('stops container includes plugin.containersToStop when it exists', async () => {
+      plugin.containersToStop = ['container1'];
+      await plugin.stopContainers();
+      expect(container0.stop).not.toHaveBeenCalled();
+      expect(container1.stop).toHaveBeenCalled();
+    });
+
+    it('passes options.function to plugin.rustContainers$', async () => {
+      await plugin.stopContainers();
+      expect(plugin.rustContainers$).toHaveBeenCalledWith('rustFunc');
     });
   });
 });

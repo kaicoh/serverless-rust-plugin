@@ -10,7 +10,7 @@ const {
   reduce,
   mergeMap,
 } = require('rxjs');
-const { table } = require('table');
+const Table = require('table');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
@@ -311,12 +311,17 @@ class ServerlessRustPlugin {
 
   rustFunction(funcName) {
     const func = this.getFunction(funcName);
+    const port = parseInt(_get(func, ['rust', 'port'], '0'), 10);
+
+    if (Number.isNaN(port)) {
+      throw this.error('port number must be an integer');
+    }
 
     return {
       name: funcName,
       config: {
         containerName: _get(func, ['rust', 'containerName']) || `${this.config.service}_${funcName}`,
-        port: _get(func, ['rust', 'port'], 0),
+        port,
         envFile: _get(func, ['rust', 'envFile']) || this.config.local.envFile,
         env: { ...this.config.environment, ...func.environment },
         dockerArgs: _get(func, ['rust', 'dockerArgs']) || this.config.local.dockerArgs,
@@ -390,16 +395,13 @@ class ServerlessRustPlugin {
   }
 
   async startContainers() {
-    // rust:start:start event
-    // 1. collect config
-    // 2. get current docker container status
     return this.rustContainers$(this.options.function)
       .pipe(
-        // 3. start the container process if it has not started yet.
+        // start the container process if it has not started yet.
         mergeMap(this.startContainer.bind(this)),
       )
-      // Change observable to promise to let node.js know startCommand as an async function.
-      // And wait starting next after:rust:start:start hook until this promise resolves.
+      // Change observable to promise to let node.js know startContainers as an async function.
+      // And wait starting next hook until this promise resolves.
       .forEach((container) => {
         this.log.info(`The container "${container.name}" has started`);
       });
@@ -408,14 +410,14 @@ class ServerlessRustPlugin {
   showContainerStatus() {
     const headers = ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'];
 
-    this.rustContainers$()
+    return this.rustContainers$()
       .pipe(
         map(Container.tableRow),
         reduce((rows, row) => [...rows, row], [headers]),
       )
       .subscribe((rows) => {
         process.stderr.write('\n');
-        process.stderr.write(table(rows));
+        process.stderr.write(Table.table(rows));
         process.stderr.write('\n');
       });
   }
