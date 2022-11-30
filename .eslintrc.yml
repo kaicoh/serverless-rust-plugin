@@ -17,3 +17,5 @@ overrides:
       jest/globals: true
     extends:
       - plugin:jest/recommended
+    rules:
+      jest/no-done-callback: off

@@ -15,12 +15,7 @@ const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
 const lambda = require('./lib/lambda');
-const {
-  hasSpawnError,
-  mkdirSyncIfNotExist,
-  readFileSyncIfExist,
-  copyFile,
-} = require('./lib/utils');
+const utils = require('./lib/utils');
 
 // https://serverless.com/blog/writing-serverless-plugins/
 // https://serverless.com/framework/docs/providers/aws/guide/plugins/
@@ -130,11 +125,10 @@ class ServerlessRustPlugin {
 
   async initialize() {
     // escape original handlers before overwriting
-    const { service } = this.serverless;
     this.originalHandlers = new Map();
 
     return this.rustFunctions$.forEach(({ name }) => {
-      const func = service.getFunction(name);
+      const func = this.getFunction(name);
       this.originalHandlers.set(name, func.handler);
     });
   }
@@ -158,7 +152,6 @@ class ServerlessRustPlugin {
       },
 
       local: {
-        port: _get(custom, ['local', 'port']),
         envFile: _get(custom, ['local', 'envFile']),
         dockerArgs: _get(custom, ['local', 'dockerArgs']),
       },
@@ -229,7 +222,7 @@ class ServerlessRustPlugin {
           };
         }),
 
-        mergeMap(({ buildPath, deployPath }) => copyFile(buildPath, deployPath)),
+        mergeMap(({ buildPath, deployPath }) => utils.copyFile(buildPath, deployPath)),
       );
   }
 
@@ -257,7 +250,7 @@ class ServerlessRustPlugin {
         mergeMap(() => CargoLambda.build(this.cargo, options, { log: this.log })),
 
         tap(({ result, artifacts }) => {
-          if (hasSpawnError(result)) {
+          if (utils.hasSpawnError(result)) {
             const { error, code } = result;
             throw this.error(`Rust build encountered an error. Exit code: ${code}. ${error}`);
           }
@@ -279,7 +272,7 @@ class ServerlessRustPlugin {
       .pipe(
         tap(() => {
           const targetDir = this.deployArtifactDir(options.profile);
-          mkdirSyncIfNotExist(targetDir);
+          utils.mkdirSyncIfNotExist(targetDir);
         }),
 
         mergeMap(() => this.modifyFunctions$(options)),
@@ -299,7 +292,7 @@ class ServerlessRustPlugin {
     }
 
     const filePath = path.resolve(this.srcPath, this.options.path);
-    const fileStr = readFileSyncIfExist(filePath);
+    const fileStr = utils.readFileSyncIfExist(filePath);
 
     if (!fileStr) {
       throw this.error(`File does not exist at ${filePath}`);
