@@ -39,73 +39,154 @@ functions:
 
 In [documents of AWS Lambda Runtime](https://github.com/awslabs/aws-lambda-rust-runtime) the handler is set to be `bootstrap`. This plugin renames the handler in deployment process so you don't have to worry about it.
 
-## Deployment
-
-```
-$ serverless deploy
-```
-
-By default this plugin uses docker container to build. Make sure you have a docker daemon running.
-
-### Using local cargo lambda
-
-If your local machine installs cargo-lambda you can use it by the following.
-
-```
-custom:
-  rust:
-    cargoLambda:
-      docker: false
-```
-
 ## Example projects
 
 See [examples](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples).
 
 ## Usage
 
-### Invoke your lambda locally
-
-At the time of writing, you have to choose architecture `x86_64` to run lambda function locally via the following command because serverless framework uses docker image [lambci/lambda](https://hub.docker.com/r/lambci/lambda) whose architecture is `amd64` internally.
+### Deployment
 
 ```
-$ serverless invoke local -f hello -d '{"firstName":"Mary"}'
+$ serverless deploy
 ```
 
-For more info about local invocation see [this doc](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local).
+By default this plugin uses docker container to build. Make sure you have a docker daemon running. But if your local machine installs cargo lambda, you can use it by the following configuration.
 
-Or if your local machine installs docker, you can invoke your lambda by the following regardless of the architecture.
-
-```
-$ serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
-```
-
-#### Options for rust:invoke:local command
-
-| option | shortcut | type | required | default| description |
-| :--- | :---: | :--- | :---: | :---: | :--- |
-| function | f | string | ✅ |  | The name of the function in your service that you want to invoke locally. Required. |
-| path | p | string |  |  | The path to a JSON file holding input data to be passed to the invoked function as the event. This path is relative to the root directory of the service. |
-| data | d | string |  |  | String containing data to be passed as an event to your function. Keep in mind that if you pass both --path and --data, the data included in the --path file will overwrite the data you passed with the --data flag. |
-| env | e | string |  |  | String representing an environment variable to set when invoking your function, in the form `<name>=<value>`. Can be repeated for more than one environment variable. |
-| env-file |  | string |  |  | The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service. |
-| port |  | number |  | 9000 | The port number docker container exposes to accept request. |
-| docker-args |  | string |  |  | Additional arguments passed to `docker run` command for lambda function container. |
-| stdout |  | boolean |  |  | By default this command outputs to `stderr`. If you want to change this behavior to `stdout` use this flag. |
-
-Need more examples? See [examples/simple](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple).
-
-#### Configuration for rust:invoke:local command
-
-Using serverless.yml, you can omit some rust:invoke:local options. For now `port`, `envFile` and `dockerArgs` are available.
+#### Configuration for build
 
 ```
+provider:
+  name: aws
+  architecture: arm64
+
 custom:
   rust:
+    cargoLambda:
+      docker: false
+      profile: debug
+```
+
+| option | path in serverless.yml | values | description |
+| :--- | :--- | :---: | :--- |
+| architecture | provider.architecture | x86_64, arm64 | The architecture cargo lambda compiles for. default is x86_64. |
+| docker | custom.rust.cargoLambda.docker | boolean | Use docker to compile or not. If true, this plugin uses [calavera/cargo-lambda](https://hub.docker.com/r/calavera/cargo-lambda) otherwise cargo lambda in your local machine. |
+| profile | custom.rust.cargoLambda.profile | release, debug | The mode cargo lambda compiles. default is release. |
+
+### Local Test
+
+Using docker, this plugin has some commands for testing your lambda functions locally. These commands use docker regardless of the setting for cargo lambda build.
+(Local testing is nothing to do with `custom.rust.cargoLambda.docker` in serverless.yml.) For more info, see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs).
+
+```
+service: my-service
+
+provider:
+  name: aws
+  runtime: provided.al2
+  architecture: arm64
+
+plugins
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    cargoLambda:
+      docker: false
     local:
-      port: 9000
-      # equivalent to --env-file option
-      envFile: .env
-      # equivalent to --docker-args option
-      dockerArgs: "--add-host host.docker.internal:host-gateway --network my-docker-network"
+      envFile: .env.global
+      dockerArgs: --network my-network-global
+
+functions:
+  rustFunc0:
+    handler: cargo-package.bin0
+    rust:
+      port: 8080
+      envFile: .env.local
+      dockerArgs: --network my-network-local
+
+  rustFunc1:
+    handler: cargo-package.bin1
+
+  nonRustFunc:
+    handler: non-of-the-above
+```
+
+#### rust:start
+
+Start the docker container according to the configuration in serverless.yml and show the status for each container. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:start).
+
+```
+$ serverless rust:start
+...
+    Finished release [optimized] target(s) in 0.83s
+
+╔════════════╤══════════════════════╤═════════╤═══════════════════════════╗
+║ FUNCTION   │ CONTAINER NAME       │ STATUS  │ PORTS                     ║
+╟────────────┼──────────────────────┼─────────┼───────────────────────────╢
+║ rustFunc0  │ my-service_rustFunc0 │ running │ 0.0.0.0:8080 -> 8080/tcp  ║
+╟────────────┼──────────────────────┼─────────┼───────────────────────────╢
+║ rustFunc1  │ my-service_rustFunc1 │ running │ 0.0.0.0:60702 -> 8080/tcp ║
+╚════════════╧══════════════════════╧═════════╧═══════════════════════════╝
+```
+
+#### rust:ps
+
+Show the status for each container. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:ps).
+
+```
+$ serverless rust:ps
+
+╔════════════╤══════════════════════╤═════════╤═══════════════════════════╗
+║ FUNCTION   │ CONTAINER NAME       │ STATUS  │ PORTS                     ║
+╟────────────┼──────────────────────┼─────────┼───────────────────────────╢
+║ rustFunc0  │ my-service_rustFunc0 │ running │ 0.0.0.0:8080 -> 8080/tcp  ║
+╟────────────┼──────────────────────┼─────────┼───────────────────────────╢
+║ rustFunc1  │ my-service_rustFunc1 │ running │ 0.0.0.0:60702 -> 8080/tcp ║
+╚════════════╧══════════════════════╧═════════╧═══════════════════════════╝
+```
+
+#### rust:invoke
+
+Invoke lambda function and show output. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:invoke).
+
+```
+$ serverless rust:invoke -f rustFunc0 -d '{"firstName":"Mary"}'
+...
+    Finished release [optimized] target(s) in 0.39s
+
+{"message":"Hi, Mary!"}
+```
+
+#### rust:logs
+
+Show logs of lambda functions. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:logs).
+
+```
+$ serverless rust:logs
+rustFunc1  | START RequestId: 67394de9-1577-4ebd-be58-ba4237b71ef1 Version: $LATEST
+rustFunc1  | END RequestId: 67394de9-1577-4ebd-be58-ba4237b71ef1
+rustFunc1  | REPORT RequestId: 67394de9-1577-4ebd-be58-ba4237b71ef1	Init Duration: 4.09 ms	Duration: 237.96 ms	Billed Duration: 238 ms	Memory Size: 3008 MB	Max Memory Used: 3008 MB
+rustFunc0  | START RequestId: e85bd375-77cf-411a-b31b-08170a454a62 Version: $LATEST
+rustFunc0  | END RequestId: e85bd375-77cf-411a-b31b-08170a454a62
+rustFunc0  | REPORT RequestId: e85bd375-77cf-411a-b31b-08170a454a62	Init Duration: 4.28 ms	Duration: 240.70 ms	Billed Duration: 241 ms	Memory Size: 3008 MB	Max Memory Used: 3008 MB
+rustFunc0  | START RequestId: 0a3e927b-8ff2-456a-9691-5003b7e1004e Version: $LATEST
+rustFunc0  | END RequestId: 0a3e927b-8ff2-456a-9691-5003b7e1004e
+rustFunc0  | REPORT RequestId: 0a3e927b-8ff2-456a-9691-5003b7e1004e	Duration: 40.65 ms	Billed Duration: 41 ms	Memory Size: 3008 MB	Max Memory Used: 3008 MB
+```
+
+#### rust:stop
+
+Stop containers and show the status. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:stop).
+
+```
+$ serverless rust:stop
+
+╔════════════╤════════════════╤═══════════╤═══════╗
+║ FUNCTION   │ CONTAINER NAME │ STATUS    │ PORTS ║
+╟────────────┼────────────────┼───────────┼───────╢
+║ rustFunc0  │                │ not exist │       ║
+╟────────────┼────────────────┼───────────┼───────╢
+║ rustFunc1  │                │ not exist │       ║
+╚════════════╧════════════════╧═══════════╧═══════╝
 ```

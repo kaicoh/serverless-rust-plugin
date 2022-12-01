@@ -1329,7 +1329,7 @@ describe('ServerlessRustPlugin', () => {
     });
   });
 
-  describe('method: showLogs', () => {
+  describe('method: showLogs$', () => {
     let subject;
 
     let container0;
@@ -1369,148 +1369,187 @@ describe('ServerlessRustPlugin', () => {
         fromIndex: jest.fn(() => 'fromIndex'),
       };
 
-      subject = () => plugin.showLogs();
+      subject = () => plugin.showLogs$();
     });
 
-    it('passes all log streams to stderr', async () => {
-      await subject();
+    it('passes all log streams to stderr', (done) => {
+      subject().add(() => {
+        expect(stream0.pipe).toHaveBeenCalledWith(process.stderr);
+        expect(stream1.pipe).toHaveBeenCalledWith(process.stderr);
 
-      expect(stream0.pipe).toHaveBeenCalledWith(process.stderr);
-      expect(stream1.pipe).toHaveBeenCalledWith(process.stderr);
+        done();
+      });
     });
 
-    it('passes log streams from running container only', async () => {
+    it('passes log streams from running containers only', (done) => {
       container0.isRunning = false;
       container1.isRunning = true;
 
-      await subject();
+      subject().add(() => {
+        expect(stream0.pipe).not.toHaveBeenCalledWith();
+        expect(stream1.pipe).toHaveBeenCalledWith(process.stderr);
 
-      expect(stream0.pipe).not.toHaveBeenCalledWith();
-      expect(stream1.pipe).toHaveBeenCalledWith(process.stderr);
+        done();
+      });
     });
 
-    it('doesn\'t pass any log streams to stderr if there are no running containers', async () => {
+    it('doesn\'t pass any log streams to stderr if there are no running containers', (done) => {
       container0.isRunning = false;
       container1.isRunning = false;
 
-      await subject();
+      subject().add(() => {
+        expect(stream0.pipe).not.toHaveBeenCalledWith();
+        expect(stream1.pipe).not.toHaveBeenCalledWith();
 
-      expect(stream0.pipe).not.toHaveBeenCalledWith();
-      expect(stream1.pipe).not.toHaveBeenCalledWith();
+        done();
+      });
     });
 
-    it('gets rust containers from options.function', async () => {
-      await subject();
-      expect(plugin.rustContainers$).toHaveBeenCalledWith('rustFunc0');
+    it('gets rust containers from options.function', (done) => {
+      subject().add(() => {
+        expect(plugin.rustContainers$).toHaveBeenCalledWith('rustFunc0');
+        done();
+      });
     });
 
-    it('gets container log streams with color option if options.color is true', async () => {
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        color: 'fromIndex',
-      }));
+    it('gets container log streams with color option if options.color is true', (done) => {
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          color: 'fromIndex',
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams with color option if options.color is undefined', async () => {
+    it('gets container log streams with color option if options.color is undefined', (done) => {
       options.color = undefined;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        color: 'fromIndex',
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        color: 'fromIndex',
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          color: 'fromIndex',
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          color: 'fromIndex',
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams without color option if options.color is false', async () => {
+    it('gets container log streams without color option if options.color is false', (done) => {
       options.color = false;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        color: 'default',
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        color: 'default',
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          color: 'default',
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          color: 'default',
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams with all option if options.all is true', async () => {
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: true,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: true,
-      }));
+    it('gets container log streams with all option if options.all is true', (done) => {
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: true,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: true,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams without all option if options.all is undefined', async () => {
+    it('gets container log streams without all option if options.all is undefined', (done) => {
       options.all = undefined;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: false,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: false,
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: false,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: false,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams without all option if options.all is false', async () => {
+    it('gets container log streams without all option if options.all is false', (done) => {
       options.all = false;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: false,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        all: false,
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: false,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          all: false,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams with watch option if options.watch is true', async () => {
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: true,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: true,
-      }));
+    it('gets container log streams with watch option if options.watch is true', (done) => {
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: true,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: true,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams without watch option if options.watch is undefined', async () => {
+    it('gets container log streams without watch option if options.watch is undefined', (done) => {
       options.watch = undefined;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: false,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: false,
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: false,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: false,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log streams without watch option if options.watch is false', async () => {
+    it('gets container log streams without watch option if options.watch is false', (done) => {
       options.watch = false;
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: false,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        watch: false,
-      }));
+
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: false,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          watch: false,
+        }));
+
+        done();
+      });
     });
 
-    it('gets container log stream with prefixSize option as longest function name + 1', async () => {
+    it('gets container log stream with prefixSize option as longest function name + 1', (done) => {
       // expected = 'loooooongNameFunction'.length + 1
-      await subject();
-      expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        prefixSize: 22,
-      }));
-      expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
-        prefixSize: 22,
-      }));
-    });
+      subject().add(() => {
+        expect(container0.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          prefixSize: 22,
+        }));
+        expect(container1.logStreams).toHaveBeenCalledWith(expect.objectContaining({
+          prefixSize: 22,
+        }));
 
-    it('throws an error if something wrong', async () => {
-      plugin.rustContainers$ = jest.fn(() => of(undefined));
-      await expect(() => subject()).rejects.toThrow();
+        done();
+      });
     });
   });
 

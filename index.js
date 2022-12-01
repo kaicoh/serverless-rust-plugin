@@ -6,6 +6,7 @@ const {
   from,
   tap,
   map,
+  combineLatest,
   filter,
   reduce,
   mergeMap,
@@ -138,7 +139,7 @@ class ServerlessRustPlugin {
 
       'rust:ps:show': this.showContainerStatus.bind(this),
 
-      'rust:logs:show': this.showLogs.bind(this),
+      'rust:logs:show': this.showLogs$.bind(this),
 
       'before:rust:invoke:execute': this.buildBinary.bind(this),
       'rust:invoke:execute': this.invokeFunction.bind(this),
@@ -450,28 +451,25 @@ class ServerlessRustPlugin {
       });
   }
 
-  async showLogs() {
+  showLogs$() {
     const runningContainers$ = this.rustContainers$(this.options.function)
       .pipe(filter((container) => container.isRunning));
 
-    const prefixSize = await (new Promise((resolve, reject) => {
-      runningContainers$
-        .pipe(
-          map((container) => container.funcName),
-          reduce((names, name) => [...names, name], []),
-        )
-        .subscribe({
-          next: (names) => {
-            const [longestName] = names.sort((a, b) => b.length - a.length);
-            resolve(longestName ? longestName.length + 1 : 0);
-          },
-          error: (err) => reject(this.error(err.message)),
-        });
-    }));
-
-    return runningContainers$
+    const prefixSize$ = runningContainers$
       .pipe(
-        map((container, index) => {
+        map((container) => container.funcName),
+
+        reduce((names, name) => [...names, name], []),
+
+        map((names) => {
+          const [longestName] = names.sort((a, b) => b.length - a.length);
+          return longestName ? longestName.length + 1 : 0;
+        }),
+      );
+
+    return combineLatest([prefixSize$, runningContainers$])
+      .pipe(
+        map(([prefixSize, container], index) => {
           const color = this.options.color === false
             ? utils.color.default : utils.color.fromIndex(index);
 
