@@ -63,6 +63,30 @@ class ServerlessRustPlugin {
         usage: 'Outputs current status for docker containers',
         lifecycleEvents: ['show'],
       },
+      'rust:logs': {
+        usage: 'Outputs lambda function logs for docker containers.',
+        lifecycleEvents: ['show'],
+        options: {
+          function: {
+            usage: 'The name of the function to show logs. If not given, all the rust function stops',
+            shortcut: 'f',
+            type: 'multiple',
+          },
+          color: {
+            usage: 'Output logs with colored function name',
+            type: 'boolean',
+          },
+          all: {
+            usage: 'Output all logs from the container',
+            type: 'boolean',
+          },
+          watch: {
+            usage: 'Keep streaming logs until SIGINT',
+            shortcut: 'w',
+            type: 'boolean',
+          },
+        },
+      },
       'rust:invoke': {
         usage: 'Invoke lambda function locally according to configurations and options',
         lifecycleEvents: ['execute'],
@@ -113,6 +137,8 @@ class ServerlessRustPlugin {
       'after:rust:start:start': this.showContainerStatus.bind(this),
 
       'rust:ps:show': this.showContainerStatus.bind(this),
+
+      'rust:logs:show': this.showLogs.bind(this),
 
       'before:rust:invoke:execute': this.buildBinary.bind(this),
       'rust:invoke:execute': this.invokeFunction.bind(this),
@@ -231,12 +257,10 @@ class ServerlessRustPlugin {
       throw this.error('Provider must be "aws" to use this plugin');
     }
 
-    return this.rustFunctions$
+    return this.rustFunctionCount$
       .pipe(
-        reduce((acc) => acc + 1, 0),
-
-        tap((rustFunctionCount) => {
-          if (rustFunctionCount === 0) {
+        tap((total) => {
+          if (total === 0) {
             throw this.error(
               'Error: no Rust functions found. '
               + 'Use "handler: {cargo-package-name}.{bin-name}" or "handler: {cargo-package-name}" '
@@ -356,6 +380,10 @@ class ServerlessRustPlugin {
       );
   }
 
+  get rustFunctionCount$() {
+    return this.rustFunctions$.pipe(reduce((acc) => acc + 1, 0));
+  }
+
   // Assume funcNames is undefined | string | string[].
   rustContainers$(funcNames) {
     return this.rustFunctions$
@@ -419,6 +447,46 @@ class ServerlessRustPlugin {
         process.stderr.write('\n');
         process.stderr.write(Table.table(rows));
         process.stderr.write('\n');
+      });
+  }
+
+  async showLogs() {
+    const runningContainers$ = this.rustContainers$(this.options.function)
+      .pipe(filter((container) => container.isRunning));
+
+    const prefixSize = await (new Promise((resolve, reject) => {
+      runningContainers$
+        .pipe(
+          map((container) => container.funcName),
+          reduce((names, name) => [...names, name], []),
+        )
+        .subscribe({
+          next: (names) => {
+            const [longestName] = names.sort((a, b) => b.length - a.length);
+            resolve(longestName ? longestName.length + 1 : 0);
+          },
+          error: (err) => reject(this.error(err.message)),
+        });
+    }));
+
+    return runningContainers$
+      .pipe(
+        map((container, index) => {
+          const color = this.options.color === false
+            ? utils.color.default : utils.color.fromIndex(index);
+
+          return container.logStreams({
+            color,
+            prefixSize,
+            all: this.options.all === true,
+            watch: this.options.watch === true,
+          });
+        }),
+      )
+      .subscribe((logStreams) => {
+        logStreams.forEach((stream) => {
+          stream.pipe(process.stderr);
+        });
       });
   }
 

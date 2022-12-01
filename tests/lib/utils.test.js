@@ -1,7 +1,7 @@
 const cp = require('child_process');
 const net = require('net');
 const fs = require('fs');
-const { PassThrough } = require('stream');
+const { PassThrough, Readable } = require('stream');
 const utils = require('../../lib/utils');
 
 jest.mock('child_process');
@@ -293,5 +293,97 @@ describe('color', () => {
 
   it('doesn\'t decorate message when color.default is called', () => {
     expect(utils.color.default('Message')).toEqual('Message');
+  });
+
+  describe('fromIndex', () => {
+    const message = 'message';
+    const indexTable = [
+      ['cyan', 0],
+      ['yellow', 1],
+      ['green', 2],
+      ['magenta', 3],
+      ['blue', 4],
+      ['red', 5],
+    ];
+
+    it.each(indexTable)('docorates with "%s" if index is %d(mod 6)', (color, index) => {
+      expect(utils.color.fromIndex(index)(message)).toEqual(utils.color[color](message));
+    });
+  });
+});
+
+describe('addPrefixForEachLine', () => {
+  /*
+   * Assume following
+   *
+   * [Input Stream]
+   * Lorem ipsum dolor si
+   * t amet, consectetur
+   * adipiscing elit. Pha
+   * sellus pulvinar nibh
+   * sed mauris convall
+   *
+   * [Output Stream]
+   * [prefix] Lorem ipsum dolor si
+   * [prefix] t amet, consectetur
+   * [prefix] adipiscing elit. Pha
+   * [prefix] sellus pulvinar nibh
+   * [prefix] sed mauris convall
+   */
+
+  it('inserts prefix for each line', (done) => {
+    const outputs = [];
+    const expected = [
+      '[prefix] Lorem ipsum dolor si',
+      '[prefix] t amet, consectetur ',
+      '[prefix] adipiscing elit. Pha',
+      '[prefix] sellus pulvinar nibh',
+      '[prefix] sed mauris convall\n',
+    ].join('\n');
+
+    async function* inputs() {
+      yield 'Lorem ipsum do';
+      yield 'lor si\nt ame';
+      yield 't, consectetur \nadipiscing elit. Pha\nsell';
+      yield 'us pulvinar ';
+      yield 'nibh\nsed mauris convall';
+    }
+
+    const stream = Readable.from(inputs())
+      .pipe(utils.addPrefixForEachLine('[prefix] '));
+
+    stream.on('data', (chunk) => {
+      outputs.push(chunk.toString());
+    });
+
+    stream.on('end', () => {
+      const output = outputs.join('');
+      expect(output).toEqual(expected);
+
+      done();
+    });
+  });
+
+  it('doesn\'t emit data if there are no rest data in flushing', (done) => {
+    const outputs = [];
+    const expected = '[prefix] Lorem ipsum dolor si\n';
+
+    async function* inputs() {
+      yield 'Lorem ipsum dolor si\n';
+    }
+
+    const stream = Readable.from(inputs())
+      .pipe(utils.addPrefixForEachLine('[prefix] '));
+
+    stream.on('data', (chunk) => {
+      outputs.push(chunk.toString());
+    });
+
+    stream.on('end', () => {
+      const output = outputs.join('');
+      expect(output).toEqual(expected);
+
+      done();
+    });
   });
 });

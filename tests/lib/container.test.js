@@ -1,6 +1,8 @@
+const cp = require('child_process');
 const Container = require('../../lib/container');
 const utils = require('../../lib/utils');
 
+jest.mock('child_process');
 jest.mock('../../lib/utils');
 
 describe('Container', () => {
@@ -92,6 +94,13 @@ describe('Container', () => {
     it('returns formated string from the inner state', () => {
       const container = new Container(args({ foo: 'bar', bar: 'baz' }));
       expect(container.format()).toEqual('{\n\t"foo": "bar",\n\t"bar": "baz"\n}');
+    });
+  });
+
+  describe('property: "id"', () => {
+    it('returns from state.Id', () => {
+      const container = new Container(args({ Id: 'abcde' }));
+      expect(container.id).toEqual('abcde');
     });
   });
 
@@ -418,6 +427,88 @@ describe('Container', () => {
       const result = await container.refresh();
       expect(result).toBeInstanceOf(Container);
       expect(result._state).toEqual({ foo: 'bar' });
+    });
+  });
+
+  describe('method: logStreams', () => {
+    let subject;
+    let stdout;
+    let stderr;
+    let color;
+    let options;
+
+    beforeEach(() => {
+      color = jest.fn(() => 'a prefix');
+
+      cp.spawn = jest.fn(() => ({ stdout, stderr }));
+
+      utils.addPrefixForEachLine = jest.fn()
+        .mockImplementationOnce(() => 'mockedStream0')
+        .mockImplementationOnce(() => 'mockedStream1')
+        .mockImplementation(() => {});
+
+      stdout = { pipe: jest.fn(() => 'stdout') };
+      stderr = { pipe: jest.fn(() => 'stderr') };
+
+      options = {
+        color,
+        prefixSize: 10,
+        all: true,
+        watch: true,
+      };
+
+      subject = (opts) => {
+        const container = new Container(args({ Name: 'container name' }));
+        return container.logStreams(opts);
+      };
+    });
+
+    it('determins paddingSize from given prefixSize', () => {
+      subject(options);
+      expect(color).toHaveBeenCalledWith('test       | ');
+    });
+
+    it('determins paddingSize from self.funcName if self.funcName is greater than given prefixSize', () => {
+      options.prefixSize = 3;
+
+      subject(options);
+      expect(color).toHaveBeenCalledWith('test | ');
+    });
+
+    it('calls docker logs command with -f option if options.watch is true', () => {
+      subject(options);
+      expect(cp.spawn).toHaveBeenCalledWith(
+        'docker',
+        ['logs', 'container name', '-f'],
+        { stdio: 'pipe' },
+      );
+    });
+
+    it('calls docker logs command without -f option if options.watch is false', () => {
+      options.watch = false;
+
+      subject(options);
+      expect(cp.spawn).toHaveBeenCalledWith(
+        'docker',
+        ['logs', 'container name'],
+        { stdio: 'pipe' },
+      );
+    });
+
+    it('returns stdout stream only if options.all is false', () => {
+      options.all = false;
+
+      const result = subject(options);
+      expect(result).toHaveLength(1);
+      expect(result).toEqual(expect.arrayContaining(['stdout']));
+    });
+
+    it('returns stdout and stderr streams if options.all is true', () => {
+      options.all = true;
+
+      const result = subject(options);
+      expect(result).toHaveLength(2);
+      expect(result).toEqual(expect.arrayContaining(['stdout', 'stderr']));
     });
   });
 });
