@@ -64,12 +64,14 @@ custom:
   rust:
     cargoLambda:
       docker: false
+      profile: debug
 ```
 
 | option | path in serverless.yml | values | description |
 | :--- | :--- | :---: | :--- |
 | architecture | provider.architecture | x86_64, arm64 | The architecture cargo lambda compiles for. default is x86_64. |
 | docker | custom.rust.cargoLambda.docker | boolean | Use docker to compile or not. If true, this plugin uses [calavera/cargo-lambda](https://hub.docker.com/r/calavera/cargo-lambda) otherwise cargo lambda in your local machine. |
+| profile | custom.rust.cargoLambda.profile | release, debug | The mode cargo lambda compiles. default is release. |
 
 ### Local Test
 
