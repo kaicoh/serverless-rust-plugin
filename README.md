@@ -41,7 +41,7 @@ In [documents of AWS Lambda Runtime](https://github.com/awslabs/aws-lambda-rust-
 
 ## Example projects
 
-See [examples](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples).
+See [examples](examples).
 
 ## Usage
 
@@ -76,7 +76,7 @@ custom:
 ### Local Test
 
 Using docker, this plugin has some commands for testing your lambda functions locally. These commands use docker regardless of the setting for cargo lambda build.
-(Local testing is nothing to do with `custom.rust.cargoLambda.docker` in serverless.yml.) For more info, see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs).
+(Local testing is nothing to do with `custom.rust.cargoLambda.docker` in serverless.yml.) For more info, see [this](docs).
 
 ```
 service: my-service
@@ -114,7 +114,7 @@ functions:
 
 #### rust:start
 
-Start the docker container according to the configuration in serverless.yml and show the status for each container. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:start).
+Start the docker container according to the configuration in serverless.yml and show the status for each container. For more information about configurations and options for this command see [this](docs/rust:start).
 
 ```
 $ serverless rust:start
@@ -132,7 +132,7 @@ $ serverless rust:start
 
 #### rust:ps
 
-Show the status for each container. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:ps).
+Show the status for each container. For more information about configurations and options for this command see [this](docs/rust:ps).
 
 ```
 $ serverless rust:ps
@@ -148,7 +148,7 @@ $ serverless rust:ps
 
 #### rust:invoke
 
-Invoke lambda function and show output. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:invoke).
+Invoke lambda function and show output. For more information about configurations and options for this command see [this](docs/rust:invoke).
 
 ```
 $ serverless rust:invoke -f rustFunc0 -d '{"firstName":"Mary"}'
@@ -160,7 +160,7 @@ $ serverless rust:invoke -f rustFunc0 -d '{"firstName":"Mary"}'
 
 #### rust:logs
 
-Show logs of lambda functions. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:logs).
+Show logs of lambda functions. For more information about configurations and options for this command see [this](docs/rust:logs).
 
 ```
 $ serverless rust:logs
@@ -177,7 +177,7 @@ rustFunc0  | REPORT RequestId: 0a3e927b-8ff2-456a-9691-5003b7e1004e	Duration: 40
 
 #### rust:stop
 
-Stop containers and show the status. For more information about configurations and options for this command see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/docs/rust:stop).
+Stop containers and show the status. For more information about configurations and options for this command see [this](docs/rust:stop).
 
 ```
 $ serverless rust:stop
@@ -190,3 +190,7 @@ $ serverless rust:stop
 ║ rustFunc1  │                │ not exist │       ║
 ╚════════════╧════════════════╧═══════════╧═══════╝
 ```
+
+## License
+
+This software is released under the [MIT License](LICENSE).

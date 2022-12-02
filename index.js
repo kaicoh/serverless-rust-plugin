@@ -69,7 +69,7 @@ class ServerlessRustPlugin {
         lifecycleEvents: ['show'],
         options: {
           function: {
-            usage: 'The name of the function to show logs. If not given, all the rust function stops',
+            usage: 'The name of the function to show logs.',
             shortcut: 'f',
             type: 'multiple',
           },
