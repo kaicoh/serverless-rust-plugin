@@ -17,12 +17,11 @@ npm run s3:start
 ####################################
 #  Local invocation test
 ####################################
-echo "Test rust:invoke:local command"
+echo "Test rust:invoke command"
 
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f putS3Object \
     -p event.json \
-    --port 8088 \
     --stdout \
     1>output.json \
     2>stderr.log
