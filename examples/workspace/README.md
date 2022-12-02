@@ -47,11 +47,11 @@ $ npm install
 ## Test
 
 ```
-$ npx serverless rust:invoke:local -f useFirstName -p event.json
+$ npx serverless rust:invoke -f useFirstName -p event.json
 {"message":"Hi, Mary!"}
 ```
 
 ```
-$ npx serverless rust:invoke:local -f useLastName -p event.json
+$ npx serverless rust:invoke -f useLastName -p event.json
 {"message":"Hi, Sue!"}
 ```

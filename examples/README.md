@@ -4,7 +4,7 @@ Sample projects for serverless-rust-plugin.
 
 ## Simple(/simple)
 
-Super simple project. If you are new to this plugin, see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple). This project includes some examples for `rust:invoke:local` command.
+Super simple project. If you are new to this plugin, see [this](https://github.com/kaicoh/serverless-rust-plugin/tree/main/examples/simple). This project includes some examples for `rust:invoke` command.
 
 ## Multi binary(/multi-binary)
 

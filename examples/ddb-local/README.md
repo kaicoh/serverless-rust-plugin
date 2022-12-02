@@ -95,7 +95,7 @@ $ npm run ddb:setup
 ## Test
 
 ```
-$ npx serverless rust:invoke:local -f query -p event.json --stdout 2>/dev/null | jq .
+$ npx serverless rust:invoke -f query -p event.json --stdout 2>/dev/null | jq .
 [
   {
     "albumTitle": "Songs About Life",

@@ -20,7 +20,7 @@ assert_success "it packages with serverless" \
 test_package hello event.json
 
 assert_success "when invoked from package \"hello\", it produces expected output" \
-    diff output.json expects/package.json
+    diff output.json expected.json
 
 if [ $STATUS -ne 0 ]
 then
@@ -30,19 +30,18 @@ fi
 ####################################
 #  Local invocation test
 ####################################
-echo "Test rust:invoke:local command"
+echo "Test rust:invoke command"
 
 # Test -d option
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f hello \
     -d '{"firstName":"Mary"}' \
-    --port 8080 \
     --stdout \
     1>output.json \
     2>stderr.log
 
 assert_success "when invoked locally with -d option, it produces expected output" \
-    diff output.json expects/dataOption.json
+    diff output.json expected.json
 
 if [ $STATUS -ne 0 ]
 then
@@ -50,53 +49,15 @@ then
 fi
 
 # Test -p option
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f hello \
     -p event.json \
-    --port 8088 \
     --stdout \
     1>output.json \
     2>stderr.log
 
 assert_success "when invoked locally with -p option, it produces expected output" \
-    diff output.json expects/pathOption.json
-
-if [ $STATUS -ne 0 ]
-then
-    show_outputs output.json stderr.log
-fi
-
-# Test -e option
-npx serverless rust:invoke:local \
-    -f hello \
-    -p event.json \
-    -e GREETING="Good evening" \
-    -e STATUS=Fine \
-    --port 8888 \
-    --stdout \
-    1>output.json \
-    2>stderr.log
-
-assert_success "when invoked locally with -e option, it produces expected output" \
-    diff output.json expects/envOption.json
-
-if [ $STATUS -ne 0 ]
-then
-    show_outputs output.json stderr.log
-fi
-
-# Test --env-file option
-npx serverless rust:invoke:local \
-    -f hello \
-    -p event.json \
-    --env-file .env \
-    --port 8008 \
-    --stdout \
-    1>output.json \
-    2>stderr.log
-
-assert_success "when invoked locally with --env-file option, it produces expected output" \
-    diff output.json expects/envOption.json
+    diff output.json expected.json
 
 if [ $STATUS -ne 0 ]
 then

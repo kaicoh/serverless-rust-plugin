@@ -1,57 +1,96 @@
 'use strict';
 
 const path = require('path');
-const fs = require('fs');
-const http = require('http');
-const { spawnSync } = require('child_process');
 const _get = require('lodash.get');
+const {
+  from,
+  tap,
+  map,
+  combineLatest,
+  filter,
+  reduce,
+  mergeMap,
+} = require('rxjs');
+const Table = require('table');
 const Cargo = require('./lib/cargo');
 const CargoLambda = require('./lib/cargolambda');
-const Docker = require('./lib/docker');
-const request = require('./lib/request');
-
-const DEFAULT_DOCKER_TAG = 'latest';
-const DEFAULT_DOCKER_IMAGE = 'calavera/cargo-lambda';
-const NO_OUTPUT_CAPTURE = { stdio: ['ignore', process.stdout, process.stderr] };
+const Container = require('./lib/container');
+const lambda = require('./lib/lambda');
+const utils = require('./lib/utils');
 
 // https://serverless.com/blog/writing-serverless-plugins/
 // https://serverless.com/framework/docs/providers/aws/guide/plugins/
 
-function mkdirSyncIfNotExist(dirname) {
-  if (!fs.existsSync(dirname)) {
-    fs.mkdirSync(dirname, { recursive: true });
-  }
-}
-
-function readFileSyncIfExist(filePath) {
-  if (fs.existsSync(filePath)) {
-    return fs.readFileSync(filePath, 'utf8');
-  }
-
-  return undefined;
-}
-
-function copyFile(src, dist) {
-  fs.createReadStream(src).pipe(fs.createWriteStream(dist));
-}
-
-function hasSpawnError({ status }) {
-  return typeof status !== 'number' || status > 0;
-}
-
 class ServerlessRustPlugin {
   constructor(serverless, options, { log }) {
     this.serverless = serverless;
+
+    this.serverless.configSchemaHandler.defineFunctionProperties('aws', {
+      properties: {
+        rust: {
+          type: 'object',
+          properties: {
+            containerName: { type: 'string' },
+            port: { type: 'number' },
+            envFile: { type: 'string' },
+            dockerArgs: { type: 'string' },
+          },
+          required: [],
+          additionalProperties: false,
+        },
+        required: false,
+        additionalProperties: false,
+      },
+    });
+
     this.options = options;
     this.log = log;
     this.srcPath = path.resolve(this.serverless.config.servicePath || '');
-    this.custom = (this.serverless.service.custom && this.serverless.service.custom.rust) || {};
     this.cargo = new Cargo(path.join(this.srcPath, 'Cargo.toml'));
 
     this.commands = {
-      'rust:invoke:local': {
-        usage: 'Invoke lambda function locally according to architecture defined in provider using docker container.',
-        lifecycleEvents: ['invoke'],
+      'rust:start': {
+        usage: 'Start the docker container processes according to configurations and options at once',
+        lifecycleEvents: ['start'],
+        options: {
+          function: {
+            usage: 'The name of the function to start the docker container. If not given, all the rust function starts',
+            shortcut: 'f',
+            type: 'multiple',
+          },
+        },
+      },
+      'rust:ps': {
+        usage: 'Outputs current status for docker containers',
+        lifecycleEvents: ['show'],
+      },
+      'rust:logs': {
+        usage: 'Outputs lambda function logs for docker containers.',
+        lifecycleEvents: ['show'],
+        options: {
+          function: {
+            usage: 'The name of the function to show logs.',
+            shortcut: 'f',
+            type: 'multiple',
+          },
+          color: {
+            usage: 'Output logs with colored function name',
+            type: 'boolean',
+          },
+          all: {
+            usage: 'Output all logs from the container',
+            type: 'boolean',
+          },
+          watch: {
+            usage: 'Keep streaming logs until SIGINT',
+            shortcut: 'w',
+            type: 'boolean',
+          },
+        },
+      },
+      'rust:invoke': {
+        usage: 'Invoke lambda function locally according to configurations and options',
+        lifecycleEvents: ['execute'],
         options: {
           function: {
             usage: 'The name of the function in your service that you want to invoke locally. Required.',
@@ -69,119 +108,102 @@ class ServerlessRustPlugin {
             shortcut: 'd',
             type: 'string',
           },
-          env: {
-            usage: 'String representing an environment variable to set when invoking your function, in the form <name>=<value>. Can be repeated for more than one environment variable.',
-            shortcut: 'e',
-            type: 'multiple',
-          },
-          'env-file': {
-            usage: 'The path to a file of environment variables to pass to docker container. This path is relative to the root directory of the service.',
-            type: 'string',
-          },
-          port: {
-            usage: 'The port number docker container exposes to accept request.',
-            type: 'string',
-          },
-          'docker-args': {
-            usage: 'Additional arguments passed to `docker run` command for lambda function container.',
-            type: 'string',
-          },
           stdout: {
             usage: 'The lambda function outputs to stdout. default is stderr',
             type: 'boolean',
           },
         },
       },
+      'rust:stop': {
+        usage: 'Stop all docker container process according to configurations and options',
+        lifecycleEvents: ['stop'],
+        options: {
+          function: {
+            usage: 'The name of the function to stop the docker container. If not given, all the rust function stops',
+            shortcut: 'f',
+            type: 'multiple',
+          },
+        },
+      },
     };
 
     this.hooks = {
+      initialize: this.initialize.bind(this),
+
       'before:package:createDeploymentArtifacts': this.package.bind(this),
       'before:deploy:function:packageFunction': this.package.bind(this),
-      'before:rust:invoke:local:invoke': this.beforeInvokeLocal.bind(this),
-      'rust:invoke:local:invoke': this.invokeLocal.bind(this),
-      'after:rust:invoke:local:invoke': this.stopDocker.bind(this),
+
+      'before:rust:start:start': this.buildBinary.bind(this),
+      'rust:start:start': this.startContainers.bind(this),
+      'after:rust:start:start': this.showContainerStatus.bind(this),
+
+      'rust:ps:show': this.showContainerStatus.bind(this),
+
+      'rust:logs:show': this.showLogs$.bind(this),
+
+      'before:rust:invoke:execute': this.buildBinary.bind(this),
+      'rust:invoke:execute': this.invokeFunction.bind(this),
+      'after:rust:invoke:execute': this.stopContainers.bind(this),
+
+      'rust:stop:stop': this.stopContainers.bind(this),
+      'after:rust:stop:stop': this.showContainerStatus.bind(this),
     };
   }
 
-  // `Static` settings from serverless.yml. This is distinguished from `Dynamic` options.
-  get settings() {
+  async initialize() {
+    // escape original handlers before overwriting
+    this.originalHandlers = new Map();
+
+    return this.rustFunctions$.forEach(({ name }) => {
+      const func = this.getFunction(name);
+      this.originalHandlers.set(name, func.handler);
+    });
+  }
+
+  // `Static` config from serverless.yml. This is distinguished from `Dynamic` options.
+  get config() {
+    const { service } = this.serverless;
+    const custom = _get(service, ['custom', 'rust'], {});
+
     return {
+      service: service.service || _get(service, ['serviceObject', 'name'], ''),
+
       srcPath: this.srcPath,
 
+      environment: this.serverless.service.provider.environment || {},
+
       cargoLambda: {
-        docker: _get(this.custom, ['cargoLambda', 'docker'], true),
-        dockerImage: `${DEFAULT_DOCKER_IMAGE}:${DEFAULT_DOCKER_TAG}`,
-        profile: _get(this.custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
+        docker: _get(custom, ['cargoLambda', 'docker'], true),
+        profile: _get(custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
         arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
       },
 
       local: {
-        port: _get(this.custom, ['local', 'port']),
-        envFile: _get(this.custom, ['local', 'envFile']),
-        dockerArgs: _get(this.custom, ['local', 'dockerArgs']),
+        envFile: _get(custom, ['local', 'envFile']),
+        dockerArgs: _get(custom, ['local', 'dockerArgs']),
       },
     };
+  }
+
+  getFunction(funcName) {
+    return this.serverless.service.getFunction(funcName);
+  }
+
+  buildArtifactPath(funcName) {
+    const binName = this.originalHandlers.get(funcName);
+    return this.artifacts.path(binName);
   }
 
   deployArtifactDir(profile) {
     return path.join(this.srcPath, 'target/lambda', profile);
   }
 
-  cargoLambdaOptions({ format }) {
+  buildOptions({ format }) {
     return {
       format,
-      srcPath: this.settings.srcPath,
-      ...this.settings.cargoLambda,
+      srcPath: this.config.srcPath,
+      ...this.config.cargoLambda,
     };
-  }
-
-  invokeOptions() {
-    return {
-      port: this.dockerPort(),
-      retryCount: 3,
-      retryInterval: 1000,
-      stdout: this.options.stdout || false,
-      env: this.options.env || [],
-      data: {
-        ...this.readJsonFile(),
-        ...this.strToJSON(this.options.data || '{}'),
-      },
-    };
-  }
-
-  dockerOptions({ artifactPath }) {
-    return {
-      name: 'sls-rust-plugin',
-      port: this.dockerPort(),
-      arch: this.settings.cargoLambda.arch,
-      bin: path.basename(artifactPath),
-      binDir: path.dirname(artifactPath),
-      env: this.options.env,
-      envFile: this.options['env-file'] || this.settings.local.envFile,
-      addArgs: this.options['docker-args'] || this.settings.local.dockerArgs,
-    };
-  }
-
-  // MEMO:
-  // This plugin recognize rust function whether its handler value satisfies the syntax or not.
-  // [[syntax]]
-  // functions:
-  //   rustFuncOne:
-  //     handler: cargo-package-name
-  //
-  //   rustFuncTwo:
-  //     handler: cargo-package-name.bin-name
-  //
-  //   nonRustFunc:
-  //     handler: non-of-the-above
-  getRustFunctions() {
-    const { service } = this.serverless;
-    const binaryNames = this.cargo.binaries();
-
-    return service.getAllFunctions().flatMap((funcName) => {
-      const func = service.getFunction(funcName);
-      return binaryNames.some((bin) => bin === func.handler) ? funcName : [];
-    });
   }
 
   // MEMO:
@@ -190,101 +212,112 @@ class ServerlessRustPlugin {
   // But cargo lambda builds all artifacts into same name bootstrap(.zip),
   // so this plugin copies artifacts using each function name and deploys them.
   // See: https://github.com/serverless/serverless/issues/3696
-  modifyFunctions({ artifacts, options }) {
-    const { service } = this.serverless;
-    const rustFunctions = this.getRustFunctions();
+  modifyFunctions$(options) {
     const targetDir = this.deployArtifactDir(options.profile);
 
     const useZip = options.format === CargoLambda.format.zip;
     const ext = useZip ? '.zip' : '';
 
-    this.log.info('Modify rust function definitions');
+    return this.rustFunctions$
+      .pipe(
+        map(({ name }) => {
+          const buildPath = this.buildArtifactPath(name);
+          const deployPath = path.join(targetDir, `${name}${ext}`);
 
-    rustFunctions.forEach((funcName) => {
-      const func = service.getFunction(funcName);
-      const binaryName = func.handler;
+          return {
+            name,
+            buildPath,
+            deployPath,
+          };
+        }),
 
-      const buildArtifactPath = artifacts.path(binaryName);
-      const deployArtifactPath = path.join(targetDir, `${funcName}${ext}`);
+        tap(({ name, deployPath }) => {
+          const func = this.getFunction(name);
+          const handler = useZip ? 'bootstrap' : path.basename(deployPath);
 
-      copyFile(buildArtifactPath, deployArtifactPath);
+          this.log.info(name);
+          this.log.info(`  handler: ${handler}`);
+          this.log.info('  package:');
+          this.log.info(`    artifact: ${deployPath}`);
+          this.log.info('    individually: true');
 
-      const handler = useZip ? 'bootstrap' : path.basename(deployArtifactPath);
+          func.handler = handler;
+          func.package = {
+            ...(func.package || {}),
+            artifact: deployPath,
+            individually: true,
+          };
+        }),
 
-      this.log.info(funcName);
-      this.log.info(`  handler: ${handler}`);
-      this.log.info('  package:');
-      this.log.info(`    artifact: ${deployArtifactPath}`);
-      this.log.info('    individually: true');
-
-      func.handler = handler;
-      func.package = {
-        ...(func.package || {}),
-        artifact: deployArtifactPath,
-        individually: true,
-      };
-    });
+        mergeMap(({ buildPath, deployPath }) => utils.copyFile(buildPath, deployPath)),
+      );
   }
 
-  build(options) {
+  build$(options) {
     if (this.serverless.service.provider.name !== 'aws') {
       throw this.error('Provider must be "aws" to use this plugin');
     }
 
-    const rustFunctions = this.getRustFunctions();
+    return this.rustFunctionCount$
+      .pipe(
+        tap((total) => {
+          if (total === 0) {
+            throw this.error(
+              'Error: no Rust functions found. '
+              + 'Use "handler: {cargo-package-name}.{bin-name}" or "handler: {cargo-package-name}" '
+              + 'in function configuration to use this plugin.',
+            );
+          }
 
-    if (rustFunctions.length === 0) {
-      throw this.error(
-        'Error: no Rust functions found. '
-        + 'Use "handler: {cargo-package-name}.{bin-name}" or "handler: {cargo-package-name}" '
-        + 'in function configuration to use this plugin.',
+          this.log.info('Start Cargo Lambda build');
+        }),
+
+        mergeMap(() => CargoLambda.build(this.cargo, options, { log: this.log })),
+
+        tap(({ result, artifacts }) => {
+          if (utils.hasSpawnError(result)) {
+            const { error, code } = result;
+            throw this.error(`Rust build encountered an error. Exit code: ${code}. ${error}`);
+          }
+
+          this.artifacts = artifacts;
+          this.log.info('Complete Cargo Lambda build');
+
+          artifacts.getAll().forEach(({ path: artifactPath }) => {
+            this.log.info(`build artifact: ${artifactPath}`);
+          });
+        }),
       );
-    }
-
-    const builder = new CargoLambda(this.cargo, options);
-
-    this.log.info('Start Cargo Lambda build');
-    this.log.info(builder.howToBuild());
-    this.log.info(`Running "${builder.buildCommand()}"`);
-
-    const { result, artifacts } = builder.build(spawnSync, NO_OUTPUT_CAPTURE);
-
-    if (result.error || result.status > 0) {
-      throw this.error(`Rust build encountered an error: ${result.error} ${result.status}.`);
-    }
-
-    this.log.info('Complete Cargo Lambda build');
-
-    artifacts.getAll().forEach(({ path: artifactPath }) => {
-      this.log.info(`build artifact: ${artifactPath}`);
-    });
-
-    return artifacts;
   }
 
-  package() {
-    const options = this.cargoLambdaOptions({ format: CargoLambda.format.zip });
-    const artifacts = this.build(options);
+  async package() {
+    const options = this.buildOptions({ format: CargoLambda.format.zip });
 
-    const targetDir = this.deployArtifactDir(options.profile);
-    mkdirSyncIfNotExist(targetDir);
+    return this.build$(options)
+      .pipe(
+        tap(() => {
+          const targetDir = this.deployArtifactDir(options.profile);
+          utils.mkdirSyncIfNotExist(targetDir);
+        }),
 
-    this.modifyFunctions({ artifacts, options });
-
-    this.log.success('Complete building rust functions');
+        mergeMap(() => this.modifyFunctions$(options)),
+      )
+      .forEach(() => {
+        this.log.info('Complete building rust function');
+      });
   }
 
   error(message) {
     return new this.serverless.classes.Error(message);
   }
 
-  readJsonFile() {
+  jsonFromPathOption() {
     if (!this.options.path) {
       return {};
     }
 
     const filePath = path.resolve(this.srcPath, this.options.path);
-    const fileStr = readFileSyncIfExist(filePath);
+    const fileStr = utils.readFileSyncIfExist(filePath);
 
     if (!fileStr) {
       throw this.error(`File does not exist at ${filePath}`);
@@ -301,109 +334,222 @@ class ServerlessRustPlugin {
     }
   }
 
-  dockerPort() {
-    // options.port is used when both custom.local.port and options.port are set.
-    const strPort = this.options.port || this.settings.local.port || '9000';
-    const port = parseInt(strPort, 10);
+  rustFunction(funcName) {
+    const func = this.getFunction(funcName);
+    const port = parseInt(_get(func, ['rust', 'port'], '0'), 10);
 
     if (Number.isNaN(port)) {
-      throw this.error(`port must be an integer: ${strPort}`);
+      throw this.error('port number must be an integer');
     }
 
-    return port;
+    return {
+      name: funcName,
+      config: {
+        containerName: _get(func, ['rust', 'containerName']) || `${this.config.service}_${funcName}`,
+        port,
+        envFile: _get(func, ['rust', 'envFile']) || this.config.local.envFile,
+        env: { ...this.config.environment, ...func.environment },
+        dockerArgs: _get(func, ['rust', 'dockerArgs']) || this.config.local.dockerArgs,
+      },
+    };
   }
 
-  buildAndStartDocker() {
-    // Exec binary build
-    this.log.info('Execute binary build');
-    const options = this.cargoLambdaOptions({ format: CargoLambda.format.binary });
-    const artifacts = this.build(options);
+  // MEMO:
+  // This plugin recognize rust function whether its handler value satisfies the syntax or not.
+  // [[syntax]]
+  // functions:
+  //   rustFuncOne:
+  //     handler: cargo-package-name
+  //
+  //   rustFuncTwo:
+  //     handler: cargo-package-name.bin-name
+  //
+  //   nonRustFunc:
+  //     handler: non-of-the-above
+  get rustFunctions$() {
+    const { service } = this.serverless;
+    const bins = this.cargo.binaries();
 
-    // Find artifact from function name
-    const funcName = this.options.function;
-    const artifact = artifacts.getAll().find(({ name }) => {
-      const func = this.serverless.service.getFunction(funcName);
+    return from(service.getAllFunctions())
+      .pipe(
+        filter((funcName) => {
+          const func = this.getFunction(funcName);
+          return bins.some((bin) => bin === func.handler);
+        }),
 
-      if (!func || !func.handler) {
-        throw this.error(`Not found function: ${funcName}`);
-      }
+        map((funcName) => this.rustFunction(funcName)),
+      );
+  }
 
-      return func.handler === name;
+  get rustFunctionCount$() {
+    return this.rustFunctions$.pipe(reduce((acc) => acc + 1, 0));
+  }
+
+  // Assume funcNames is undefined | string | string[].
+  rustContainers$(funcNames) {
+    return this.rustFunctions$
+      .pipe(
+        // Use filtering if the argument is provided.
+        filter(({ name }) => {
+          if (Array.isArray(funcNames)) {
+            return funcNames.some((funcName) => name === funcName);
+          }
+
+          if (typeof funcNames === 'string') {
+            return name === funcNames;
+          }
+
+          return true;
+        }),
+
+        mergeMap(({ name, config }) => Container.get({ name, config })),
+      );
+  }
+
+  async buildBinary() {
+    // before:rust:start:start event
+    const options = this.buildOptions({ format: CargoLambda.format.binary });
+    return this.build$(options).forEach(() => {
+      this.log.info('Binary build succeeded');
     });
-
-    if (!artifact) {
-      throw this.error(`Not found rust function: ${funcName}`);
-    }
-
-    this.log.info('Use this artifact');
-    this.log.info(`  bin: ${artifact.name}`);
-    this.log.info(`  path: ${artifact.path}`);
-
-    // docker run
-    this.startDocker({ artifactPath: artifact.path });
   }
 
-  async requestToDocker() {
-    const options = this.invokeOptions();
+  async startContainer(container) {
+    const options = {
+      artifact: this.buildArtifactPath(container.funcName),
+      arch: this.config.cargoLambda.arch,
+    };
 
-    // For readable output, insert a new line to console.
-    process.stderr.write('\n');
-
-    try {
-      const res = await request.invokeLambda(http.request, options);
-      this.log.info(res);
-    } catch (err) {
-      throw this.error(err);
-    }
+    return container.start(options);
   }
 
-  startDocker({ artifactPath }) {
-    const options = this.dockerOptions({ artifactPath });
-    this.docker = new Docker(options);
-
-    this.log.info(`Docker run: ${this.docker.runCommand()}`);
-    const result = this.docker.run(spawnSync);
-
-    if (hasSpawnError(result)) {
-      throw this.error(`docker run error: ${result.status}`);
-    }
-    this.log.info(`Docker container is running. Name: ${options.name}`);
+  async startContainers() {
+    return this.rustContainers$(this.options.function)
+      .pipe(
+        // start the container process if it has not started yet.
+        mergeMap(this.startContainer.bind(this)),
+      )
+      // Change observable to promise to let node.js know startContainers as an async function.
+      // And wait starting next hook until this promise resolves.
+      .forEach((container) => {
+        this.log.info(`The container "${container.name}" has started`);
+      });
   }
 
-  stopDocker({ silent } = { silent: false }) {
-    if (this.docker && this.docker.running(spawnSync)) {
-      const result = this.docker.stop(spawnSync);
+  showContainerStatus() {
+    const headers = ['FUNCTION', 'CONTAINER NAME', 'STATUS', 'PORTS'];
 
-      if (hasSpawnError(result)) {
-        throw this.error(`docker stop error: ${result.error} ${result.status}`);
-      }
-
-      if (!silent) {
-        this.log.success('Now docker container has been stopped successfully.');
-      }
-    }
+    return this.rustContainers$()
+      .pipe(
+        map(Container.tableRow),
+        reduce((rows, row) => [...rows, row], [headers]),
+      )
+      .subscribe((rows) => {
+        process.stderr.write('\n');
+        process.stderr.write(Table.table(rows));
+        process.stderr.write('\n');
+      });
   }
 
-  // just a wrapper function needs to stop docker container
-  beforeInvokeLocal() {
-    this.log.info(this.options);
+  showLogs$() {
+    const runningContainers$ = this.rustContainers$(this.options.function)
+      .pipe(filter((container) => container.isRunning));
 
-    try {
-      this.buildAndStartDocker();
-    } catch (err) {
-      this.stopDocker({ silent: true });
-      throw err;
-    }
+    const prefixSize$ = runningContainers$
+      .pipe(
+        map((container) => container.funcName),
+
+        reduce((names, name) => [...names, name], []),
+
+        map((names) => {
+          const [longestName] = names.sort((a, b) => b.length - a.length);
+          return longestName ? longestName.length + 1 : 0;
+        }),
+      );
+
+    return combineLatest([prefixSize$, runningContainers$])
+      .pipe(
+        map(([prefixSize, container], index) => {
+          const color = this.options.color === false
+            ? utils.color.default : utils.color.fromIndex(index);
+
+          return container.logStreams({
+            color,
+            prefixSize,
+            all: this.options.all === true,
+            watch: this.options.watch === true,
+          });
+        }),
+      )
+      .subscribe((logStreams) => {
+        logStreams.forEach((stream) => {
+          stream.pipe(process.stderr);
+        });
+      });
   }
 
-  // just a wrapper function needs to stop docker container
-  async invokeLocal() {
-    try {
-      await this.requestToDocker();
-    } catch (err) {
-      this.stopDocker({ silent: true });
-      throw err;
-    }
+  async invokeFunction() {
+    const options = {
+      retryCount: 3,
+      retryInterval: 1000,
+      stdout: this.options.stdout || false,
+      data: {
+        ...this.jsonFromPathOption(),
+        ...this.strToJSON(this.options.data || '{}'),
+      },
+    };
+
+    this.containersToStop = [];
+
+    return this.rustContainers$(this.options.function)
+      .pipe(
+        // If the container is not running, we stop it after the invocation.
+        tap((container) => {
+          if (!container.isRunning) {
+            this.containersToStop.push(container.name);
+          }
+        }),
+
+        mergeMap(this.startContainer.bind(this)),
+
+        mergeMap((container) => {
+          // For readable output, insert a new line to console.
+          process.stderr.write('\n');
+
+          const [port] = container.hostPortsTo(8080);
+
+          if (!port) {
+            this.log.error(container.format());
+            throw this.error('Cannot get host port binding to 8080/tcp');
+          }
+
+          return lambda.invoke({ ...options, port });
+        }),
+      )
+      // Change to promise to wait starting next hook event.
+      .forEach(() => {
+        this.log.info('The invocation has been succeeded');
+      });
+  }
+
+  async stopContainers() {
+    return this.rustContainers$(this.options.function)
+      .pipe(
+        // Use filtering if this.containersToStop property exists.
+        filter((container) => {
+          if (Array.isArray(this.containersToStop)) {
+            return this.containersToStop
+              .some((containerName) => containerName === container.name);
+          }
+
+          return true;
+        }),
+
+        mergeMap((container) => container.stop()),
+      )
+      .forEach((container) => {
+        this.log.info(`The container ${container.name} has stopped`);
+      });
   }
 }
 

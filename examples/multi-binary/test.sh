@@ -41,13 +41,12 @@ fi
 ####################################
 #  Local invocation test
 ####################################
-echo "Test rust:invoke:local command"
+echo "Test rust:invoke command"
 
 # Test useFirstName
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f useFirstName \
     -p event.json \
-    --port 8080 \
     --stdout \
     1>output.json \
     2>stderr.log
@@ -61,10 +60,9 @@ then
 fi
 
 # Test useLastName
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f useLastName \
     -p event.json \
-    --port 8088 \
     --stdout \
     1>output.json \
     2>stderr.log
