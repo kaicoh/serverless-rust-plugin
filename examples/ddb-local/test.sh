@@ -47,9 +47,9 @@ npm run ddb:setup
 ####################################
 #  Local invocation test
 ####################################
-echo "Test rust:invoke:local command"
+echo "Test rust:invoke command"
 
-npx serverless rust:invoke:local \
+npx serverless rust:invoke \
     -f query \
     -p event.json \
     --stdout \

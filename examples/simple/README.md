@@ -46,7 +46,7 @@ $ npm install
 ### "data" option
 
 ```
-$ npx serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
+$ npx serverless rust:invoke -f hello -d '{"firstName":"Mary"}'
 {"greeting":"Good morning","message":"Hi, Mary!","status":"Happy"}
 
 ```
@@ -54,22 +54,8 @@ $ npx serverless rust:invoke:local -f hello -d '{"firstName":"Mary"}'
 ### "path" option
 
 ```
-$ npx serverless rust:invoke:local -f hello -p event.json
+$ npx serverless rust:invoke -f hello -p event.json
 {"greeting":"Good morning","message":"Hi, Mary!","status":"Happy"}
-```
-
-### "env" option
-
-```
-$ npx serverless rust:invoke:local -f hello -p event.json -e GREETING="Good evening" -e STATUS=Fine
-{"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
-```
-
-### "env-file" option
-
-```
-$ npx serverless rust:invoke:local -f hello -p event.json --env-file .env
-{"greeting":"Good evening","message":"Hi, Mary!","status":"Fine"}
 ```
 
 ### pipe outputs to other command

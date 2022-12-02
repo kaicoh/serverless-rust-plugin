@@ -26,7 +26,7 @@ custom:
       # running on the local machine.
       dockerArgs: --add-host host.docker.internal:host-gateway
   s3:
-    address: 127.0.0.1
+    address: 0.0.0.0
     directory: ./buckets
     # [[important]]
     # Without this option, the hostname "host.docker.internal" is interpreted as a bucket name
@@ -59,6 +59,6 @@ $ npx serverless s3 start
 After running this command, you can find the uploaded file in the buckets/local-bucket directory.
 
 ```
-$ npx serverless rust:invoke:local -f putS3Object -p event.json
+$ npx serverless rust:invoke -f putS3Object -p event.json
 {"status":"uploaded"}
 ```
