@@ -174,7 +174,6 @@ class ServerlessRustPlugin {
 
       cargoLambda: {
         docker: _get(custom, ['cargoLambda', 'docker'], true),
-        profile: _get(custom, ['cargoLambda', 'profile'], CargoLambda.profile.release),
         arch: this.serverless.service.provider.architecture || CargoLambda.architecture.x86_64,
       },
 
@@ -198,9 +197,10 @@ class ServerlessRustPlugin {
     return path.join(this.srcPath, 'target/lambda', profile);
   }
 
-  buildOptions({ format }) {
+  buildOptions({ format, profile }) {
     return {
       format,
+      profile,
       srcPath: this.config.srcPath,
       ...this.config.cargoLambda,
     };
@@ -291,7 +291,10 @@ class ServerlessRustPlugin {
   }
 
   async package() {
-    const options = this.buildOptions({ format: CargoLambda.format.zip });
+    const options = this.buildOptions({
+      format: CargoLambda.format.zip,
+      profile: CargoLambda.profile.release,
+    });
 
     return this.build$(options)
       .pipe(
@@ -407,8 +410,11 @@ class ServerlessRustPlugin {
   }
 
   async buildBinary() {
-    // before:rust:start:start event
-    const options = this.buildOptions({ format: CargoLambda.format.binary });
+    const options = this.buildOptions({
+      format: CargoLambda.format.binary,
+      profile: CargoLambda.profile.debug,
+    });
+
     return this.build$(options).forEach(() => {
       this.log.info('Binary build succeeded');
     });

@@ -317,21 +317,6 @@ describe('ServerlessRustPlugin', () => {
       });
     });
 
-    describe('has "cargoLambda.profile" property', () => {
-      it('is from custom settings', () => {
-        serverless.service.custom.rust = {
-          cargoLambda: {
-            profile: 'debug',
-          },
-        };
-        expect(plugin.config.cargoLambda.profile).toEqual('debug');
-      });
-
-      it('is "release" if custom.rust.cargoLambda.profile is undefined', () => {
-        expect(plugin.config.cargoLambda.profile).toEqual('release');
-      });
-    });
-
     describe('has "cargoLambda.arch" property', () => {
       it('is from provider.architecture settings', () => {
         serverless.service.provider.architecture = 'arm64';
@@ -403,7 +388,7 @@ describe('ServerlessRustPlugin', () => {
   });
 
   describe('method: buildOptions', () => {
-    const args = { format: 'format' };
+    const args = { format: 'format', profile: 'profile' };
 
     describe('returns an object with property "docker"', () => {
       it('is true by default', () => {
@@ -436,23 +421,9 @@ describe('ServerlessRustPlugin', () => {
     });
 
     describe('returns an object with property "profile"', () => {
-      it('is equal to "release" by default', () => {
-        expect(plugin.buildOptions(args)).toEqual(expect.objectContaining({
-          profile: 'release',
-        }));
-      });
-
-      it('is overwritten by custom property in serverless.yml', () => {
-        // serverless.yml
-        //
-        // custom
-        //   rust:
-        //     cargoLambda:
-        //       profile: debug
-        serverless.service.custom.rust = { cargoLambda: { profile: 'debug' } };
-        plugin = new ServerlessRustPlugin(serverless, options, utils);
-        expect(plugin.buildOptions(args)).toEqual(expect.objectContaining({
-          profile: 'debug',
+      it('is from given argument', () => {
+        expect(plugin.buildOptions({ profile: 'foo' })).toEqual(expect.objectContaining({
+          profile: 'foo',
         }));
       });
     });
@@ -851,9 +822,11 @@ describe('ServerlessRustPlugin', () => {
 
     beforeEach(async () => {
       CargoLambda.format = { zip: 'zip' };
+      CargoLambda.profile = { release: 'release' };
+
       buildOptions = {
         foo: 'bar',
-        profile: 'dev',
+        profile: 'release',
       };
 
       mockUtils.mkdirSyncIfNotExist = jest.fn();
@@ -869,6 +842,7 @@ describe('ServerlessRustPlugin', () => {
     it('calls plugin.buildOptions with format zip option', () => {
       expect(plugin.buildOptions).toHaveBeenCalledWith(expect.objectContaining({
         format: CargoLambda.format.zip,
+        profile: CargoLambda.profile.release,
       }));
     });
 
@@ -879,7 +853,7 @@ describe('ServerlessRustPlugin', () => {
 
     it('calls plugin.deployArtifactDir with buildOptions.profile', () => {
       expect(plugin.deployArtifactDir).toHaveBeenCalledTimes(1);
-      expect(plugin.deployArtifactDir).toHaveBeenCalledWith('dev');
+      expect(plugin.deployArtifactDir).toHaveBeenCalledWith('release');
     });
 
     it('calls utils.mkdirSyncIfNotExist with deployArtifactDir', () => {
@@ -1212,6 +1186,7 @@ describe('ServerlessRustPlugin', () => {
       buildOptions = {};
 
       CargoLambda.format.binary = 'binary';
+      CargoLambda.profile.debug = 'debug';
 
       plugin.buildOptions = jest.fn(() => buildOptions);
       plugin.build$ = jest.fn(() => of({}));
@@ -1220,7 +1195,10 @@ describe('ServerlessRustPlugin', () => {
     });
 
     it('calls build$ with binary format option', async () => {
-      expect(plugin.buildOptions).toHaveBeenCalledWith({ format: 'binary' });
+      expect(plugin.buildOptions).toHaveBeenCalledWith({
+        format: 'binary',
+        profile: 'debug',
+      });
       expect(plugin.build$).toHaveBeenCalledWith(buildOptions);
     });
   });
