@@ -1,0 +1,23 @@
+service: lambda-proxy
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2
+  memorySize: 128
+  architecture: arm64
+
+plugins:
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    cargoLambda:
+      docker: false
+
+functions:
+  hello:
+    name: hello
+    handler: lambda-proxy
+    rust:
+      port: 8888
