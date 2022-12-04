@@ -70,6 +70,10 @@ class ServerlessRustPlugin {
             shortcut: 'f',
             type: 'multiple',
           },
+          color: {
+            usage: 'Output logs with colored function name',
+            type: 'boolean',
+          },
         },
       },
       'rust:ps': {
@@ -477,7 +481,10 @@ class ServerlessRustPlugin {
   }
 
   async startApiProxy() {
-    const proxy = ApiGatewayProxy.create({ log: this.log });
+    const proxy = ApiGatewayProxy.create({
+      log: this.log,
+      useColor: this.options.color !== false,
+    });
 
     return this.rustContainers$(this.options.function)
       .pipe(
