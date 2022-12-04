@@ -380,7 +380,18 @@ class ServerlessRustPlugin {
 
   apiRouteConfig(funcName, port) {
     const func = this.getFunction(funcName);
-    return func.events.flatMap((event) => (event.http ? [{ port, ...event.http }] : []));
+    return func.events.flatMap((event) => {
+      if (!event.http) {
+        return [];
+      }
+
+      if (typeof event.http === 'string') {
+        const [method, httpPath] = event.http.split(' ');
+        return [{ port, method, path: httpPath }];
+      }
+
+      return [{ ...event.http, port }];
+    });
   }
 
   // MEMO:
@@ -488,8 +499,7 @@ class ServerlessRustPlugin {
         }),
       )
       .forEach((config) => {
-        this.log.info('####### ApiGateway route config #######');
-        this.log.info(config);
+        // Set route to proxy server
         proxy.addRoute(config);
       })
       .then(() => this.config.api.port || utils.getFreePort())
@@ -498,6 +508,8 @@ class ServerlessRustPlugin {
           proxy.listen(port, () => {
             this.log.notice(`Now the ApiGateway proxy server is running on port ${port}.`);
           });
+        } else {
+          this.log.notice('There are no api gateway configurations');
         }
       });
   }

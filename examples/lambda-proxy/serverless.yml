@@ -18,16 +18,54 @@ custom:
       port: 9000
 
 functions:
-  hello:
-    name: hello
-    handler: lambda-proxy
+  simple:
+    name: simple
+    handler: lambda-proxy.simple
+    rust:
+      port: 8010
+    events:
+      - http: GET /simple
+
+  querystring:
+    name: querystring
+    handler: lambda-proxy.querystring
+    rust:
+      port: 8011
     events:
       - http:
-          path: hello
+          path: query
           method: get
           request:
             parameters:
               querystrings:
                 firstName: true
+
+  paths:
+    name: paths
+    handler: lambda-proxy.paths
     rust:
-      port: 8888
+      port: 8012
+    events:
+      - http:
+          path: paths/{id}
+          method: get
+          request:
+            parameters:
+              paths:
+                id: true
+
+  json:
+    name: json
+    handler: lambda-proxy.json
+    rust:
+      port: 8013
+    events:
+      - http:
+          path: json
+          method: post
+
+  nonapi:
+    name: nonapi
+    handler: lambda-proxy.nonapi
+    rust:
+      port: 8014
