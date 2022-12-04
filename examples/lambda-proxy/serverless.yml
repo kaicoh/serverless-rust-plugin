@@ -14,10 +14,20 @@ custom:
   rust:
     cargoLambda:
       docker: false
+    api:
+      port: 9000
 
 functions:
   hello:
     name: hello
     handler: lambda-proxy
+    events:
+      - http:
+          path: hello
+          method: get
+          request:
+            parameters:
+              querystrings:
+                firstName: true
     rust:
       port: 8888

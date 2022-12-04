@@ -17,6 +17,7 @@ const CargoLambda = require('./lib/cargolambda');
 const Container = require('./lib/container');
 const lambda = require('./lib/lambda');
 const utils = require('./lib/utils');
+const ApiGatewayProxy = require('./lib/proxy/server');
 
 // https://serverless.com/blog/writing-serverless-plugins/
 // https://serverless.com/framework/docs/providers/aws/guide/plugins/
@@ -55,6 +56,17 @@ class ServerlessRustPlugin {
         options: {
           function: {
             usage: 'The name of the function to start the docker container. If not given, all the rust function starts',
+            shortcut: 'f',
+            type: 'multiple',
+          },
+        },
+      },
+      'rust:api:start': {
+        usage: 'Start the API Gateway proxy server locally.',
+        lifecycleEvents: ['start'],
+        options: {
+          function: {
+            usage: 'The name of the function to start the api server. If not given, all the rust function starts',
             shortcut: 'f',
             type: 'multiple',
           },
@@ -137,6 +149,9 @@ class ServerlessRustPlugin {
       'rust:start:start': this.startContainers.bind(this),
       'after:rust:start:start': this.showContainerStatus.bind(this),
 
+      'before:rust:api:start:start': this.buildBinary.bind(this),
+      'rust:api:start:start': this.startApiProxy.bind(this),
+
       'rust:ps:show': this.showContainerStatus.bind(this),
 
       'rust:logs:show': this.showLogs$.bind(this),
@@ -181,6 +196,10 @@ class ServerlessRustPlugin {
       local: {
         envFile: _get(custom, ['local', 'envFile']),
         dockerArgs: _get(custom, ['local', 'dockerArgs']),
+      },
+
+      api: {
+        port: _get(custom, ['api', 'port']),
       },
     };
   }
@@ -354,6 +373,16 @@ class ServerlessRustPlugin {
     };
   }
 
+  hasApiProxyEvent(funcName) {
+    const func = this.getFunction(funcName);
+    return func.events.some((event) => event.http);
+  }
+
+  apiRouteConfig(funcName, port) {
+    const func = this.getFunction(funcName);
+    return func.events.flatMap((event) => (event.http ? [{ port, ...event.http }] : []));
+  }
+
   // MEMO:
   // This plugin recognize rust function whether its handler value satisfies the syntax or not.
   // [[syntax]]
@@ -433,6 +462,43 @@ class ServerlessRustPlugin {
       // And wait starting next hook until this promise resolves.
       .forEach((container) => {
         this.log.info(`The container "${container.name}" has started`);
+      });
+  }
+
+  async startApiProxy() {
+    const proxy = ApiGatewayProxy.create({ log: this.log });
+
+    return this.rustContainers$(this.options.function)
+      .pipe(
+        filter((container) => this.hasApiProxyEvent(container.funcName)),
+
+        // start the container process if it has not started yet.
+        mergeMap(this.startContainer.bind(this)),
+
+        // apiRouteConfig returns an array, but the "mergeMap" flatten it.
+        mergeMap((container) => {
+          const [port] = container.hostPortsTo(8080);
+
+          if (!port) {
+            this.log.error(container.format());
+            throw this.error('Cannot get host port binding to 8080/tcp');
+          }
+
+          return this.apiRouteConfig(container.funcName, port);
+        }),
+      )
+      .forEach((config) => {
+        this.log.info('####### ApiGateway route config #######');
+        this.log.info(config);
+        proxy.addRoute(config);
+      })
+      .then(() => this.config.api.port || utils.getFreePort())
+      .then((port) => {
+        if (proxy.hasRoutes()) {
+          proxy.listen(port, () => {
+            this.log.notice(`Now the ApiGateway proxy server is running on port ${port}.`);
+          });
+        }
       });
   }
 
