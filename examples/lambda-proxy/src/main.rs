@@ -10,7 +10,7 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn func(event: Request) -> Result<impl IntoResponse, Error> {
-    let params = event.path_parameters();
+    let params = event.query_string_parameters();
 
     let response = match params.first("firstName") {
         Some(first_name) => Response::builder()
