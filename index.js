@@ -389,6 +389,8 @@ class ServerlessRustPlugin {
         return [];
       }
 
+      // For simple api endpoint
+      // Ref: https://www.serverless.com/framework/docs/providers/aws/events/apigateway#simple-http-endpoint
       if (typeof event.http === 'string') {
         const [method, httpPath] = event.http.split(' ');
         return [{ port, method, path: httpPath }];
@@ -493,7 +495,8 @@ class ServerlessRustPlugin {
         // start the container process if it has not started yet.
         mergeMap(this.startContainer.bind(this)),
 
-        // apiRouteConfig returns an array, but the "mergeMap" flatten it.
+        // map to apiRouteConfig
+        // apiRouteConfig returns an array, but the "mergeMap" flattens it.
         mergeMap((container) => {
           const [port] = container.hostPortsTo(8080);
 
