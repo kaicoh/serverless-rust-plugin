@@ -393,10 +393,19 @@ class ServerlessRustPlugin {
       // Ref: https://www.serverless.com/framework/docs/providers/aws/events/apigateway#simple-http-endpoint
       if (typeof event.http === 'string') {
         const [method, httpPath] = event.http.split(' ');
-        return [{ port, method, path: httpPath }];
+        return [{
+          funcName,
+          port,
+          method,
+          path: httpPath,
+        }];
       }
 
-      return [{ ...event.http, port }];
+      return [{
+        ...event.http,
+        port,
+        funcName,
+      }];
     });
   }
 
@@ -516,7 +525,7 @@ class ServerlessRustPlugin {
       .then((port) => {
         if (proxy.hasRoutes()) {
           proxy.listen(port, () => {
-            this.log.notice(`Now the ApiGateway proxy server is running on port ${port}.`);
+            proxy.status().pipe(process.stderr);
           });
         } else {
           this.log.notice('There are no api gateway configurations');
