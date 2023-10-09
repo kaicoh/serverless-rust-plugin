@@ -1,6 +1,6 @@
 {
   "name": "serverless-rust-plugin",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A Serverless Framework plugin for Rust using Cargo Lambda.",
   "main": "index.js",
   "scripts": {

@@ -28,7 +28,7 @@ describe('CargoLambda', () => {
 
       it('with arguments for docker run if option docker is true', async () => {
         await subject({ docker: true, srcPath });
-        expect(utils.spawn.mock.lastCall[1]).toEqual(expect.arrayContaining([
+        expect(utils.spawn.mock.lastCall[1]).toEqual([
           'run',
           '--rm',
           '-t',
@@ -36,9 +36,11 @@ describe('CargoLambda', () => {
           'test/path:/tmp',
           '-w',
           '/tmp',
-          'calavera/cargo-lambda:latest',
+          'ghcr.io/cargo-lambda/cargo-lambda',
+          'cargo',
+          'lambda',
           'build',
-        ]));
+        ]);
       });
 
       it('with arguments for cargo lambda if option docker is false', async () => {
