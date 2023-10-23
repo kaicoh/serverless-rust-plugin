@@ -1,7 +1,7 @@
 const cp = require('child_process');
 const net = require('net');
 const fs = require('fs');
-const { PassThrough, Readable } = require('stream');
+const { PassThrough, Readable, Writable } = require('stream');
 const utils = require('../../lib/utils');
 
 jest.mock('child_process');
@@ -385,5 +385,30 @@ describe('addPrefixForEachLine', () => {
 
       done();
     });
+  });
+});
+
+describe('concat', () => {
+  it('concats given streams sequentially', (done) => {
+    const outputs = [];
+
+    const streamA = Readable.from(['0', '1', '2']);
+    const streamB = Readable.from(['a', 'b', 'c']);
+    const streamC = Readable.from(['A', 'B', 'C']);
+
+    const dest = new Writable({
+      objectMode: true,
+      write(chunk, _, callback) {
+        outputs.push(chunk);
+        callback();
+      },
+    });
+
+    dest.on('finish', () => {
+      expect(outputs).toEqual(['0', '1', '2', 'a', 'b', 'c', 'A', 'B', 'C']);
+      done();
+    });
+
+    utils.concat(streamA, streamB, streamC).pipe(dest);
   });
 });

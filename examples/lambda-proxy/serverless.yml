@@ -1,0 +1,71 @@
+service: lambda-proxy
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2
+  memorySize: 128
+  architecture: arm64
+
+plugins:
+  - serverless-rust-plugin
+
+custom:
+  rust:
+    cargoLambda:
+      docker: false
+    api:
+      port: 9000
+
+functions:
+  simple:
+    name: simple
+    handler: lambda-proxy.simple
+    rust:
+      port: 8010
+    events:
+      - http: GET /simple
+
+  querystring:
+    name: querystring
+    handler: lambda-proxy.querystring
+    rust:
+      port: 8011
+    events:
+      - http:
+          path: query
+          method: get
+          request:
+            parameters:
+              querystrings:
+                firstName: true
+
+  paths:
+    name: paths
+    handler: lambda-proxy.paths
+    rust:
+      port: 8012
+    events:
+      - http:
+          path: paths/{id}
+          method: get
+          request:
+            parameters:
+              paths:
+                id: true
+
+  json:
+    name: json
+    handler: lambda-proxy.json
+    rust:
+      port: 8013
+    events:
+      - http:
+          path: json
+          method: post
+
+  nonapi:
+    name: nonapi
+    handler: lambda-proxy.nonapi
+    rust:
+      port: 8014

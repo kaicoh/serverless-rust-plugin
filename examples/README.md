@@ -21,3 +21,7 @@ Lambda function accessing Dynamodb using docker-compose.
 ## S3 local(/s3-local)
 
 Lambda function accessing S3 using [serverless-s3-local](https://github.com/ar90n/serverless-s3-local).
+
+## Api Gateway v1 Lambda Proxy Integration(/lambda-proxy)
+
+Api gateway lambda-proxy integration example. This example also includes how to test API request in local environment.

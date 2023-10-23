@@ -1,0 +1,31 @@
+[package]
+name = "lambda-proxy"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "simple"
+path = "src/bin/simple.rs"
+
+[[bin]]
+name = "querystring"
+path = "src/bin/querystring.rs"
+
+[[bin]]
+name = "paths"
+path = "src/bin/paths.rs"
+
+[[bin]]
+name = "json"
+path = "src/bin/json.rs"
+
+[[bin]]
+name = "nonapi"
+path = "src/bin/nonapi.rs"
+
+[dependencies]
+lambda_http = "0.7"
+lambda_runtime = "0.7"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros"] }
