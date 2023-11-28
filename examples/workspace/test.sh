@@ -37,6 +37,16 @@ then
     show_outputs output.json stderr.log docker.log
 fi
 
+test_package useFirstAndLastName event.json
+
+assert_success "when invoked from package \"useFirstAndLastName\", it produces expected output" \
+    diff output.json expects/first_and_last.json
+
+if [ $STATUS -ne 0 ]
+then
+    show_outputs output.json stderr.log docker.log
+fi
+
 ####################################
 #  Local invocation test
 ####################################
@@ -68,6 +78,22 @@ npx serverless rust:invoke \
 
 assert_success "when invoked useLastName function locally, it produces expected output" \
     diff output.json expects/last.json
+
+if [ $STATUS -ne 0 ]
+then
+    show_outputs output.json stderr.log
+fi
+
+# Test useFirstAndLastName
+npx serverless rust:invoke \
+    -f useFirstAndLastName \
+    -p event.json \
+    --stdout \
+    1>output.json \
+    2>stderr.log
+
+assert_success "when invoked useFirstAndLastName function locally, it produces expected output" \
+    diff output.json expects/first_and_last.json
 
 if [ $STATUS -ne 0 ]
 then
