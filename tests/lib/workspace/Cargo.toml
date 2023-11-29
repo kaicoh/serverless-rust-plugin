@@ -2,5 +2,6 @@
 members = [
     "bin0",
     "bin1",
-    "lib0"
+    "lib0",
+    "crates/*"
 ]

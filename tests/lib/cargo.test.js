@@ -45,6 +45,7 @@ describe('Cargo instance', () => {
         expect(binaries).toEqual(expect.arrayContaining([
           'bin0',
           'bin1',
+          'bin2',
         ]));
         expect(binaries).toEqual(expect.not.arrayContaining([
           'lib0',
