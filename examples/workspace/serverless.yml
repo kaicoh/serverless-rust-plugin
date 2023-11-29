@@ -23,3 +23,7 @@ functions:
   useLastName:
     name: useLastName
     handler: last
+
+  useFirstAndLastName:
+    name: useFirstAndLastName
+    handler: first_and_last

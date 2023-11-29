@@ -2,7 +2,7 @@
 
 ## structure
 
-There are 2 binary and 1 library crates.
+There are 3 binary and 1 library crates.
 
 ```
 root
@@ -14,8 +14,12 @@ root
 │   └── src
 │       └── main.rs
 └── model
-    └── src
-        └── lib.rs
+│   └── src
+│       └── lib.rs
+└── crates
+    └── first_and_last
+        └── src
+            └── main.rs
 ```
 
 ### serverless.yml
@@ -36,6 +40,9 @@ functions:
 
   useLastName:
     handler: last
+
+  useFirstAndLastName:
+    handler: first_and_last
 ```
 
 ## Installation
@@ -54,4 +61,9 @@ $ npx serverless rust:invoke -f useFirstName -p event.json
 ```
 $ npx serverless rust:invoke -f useLastName -p event.json
 {"message":"Hi, Sue!"}
+```
+
+```
+$ npx serverless rust:invoke -f useFirstAndLastName -p event.json
+{"message":"Hi, Mary Sue!"}
 ```
